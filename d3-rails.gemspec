@@ -7,16 +7,15 @@ Gem::Specification.new do |s|
   s.authors     = ["Markus Fenske"]
   s.email       = ["iblue@gmx.net"]
   s.homepage    = "https://github.com/iblue/d3-rails"
-  s.summary     = "Use D3 with Rails 3"
-  s.description = "This gem provides D3 for your Rails 3 application."
+  s.summary     = "D3 for Rails 3.1 Asset Pipeline"
+  s.description = "This gem provides D3 for Rails 3.1 Asset Pipeline."
 
   s.required_rubygems_version = ">= 1.3.6"
   s.rubyforge_project         = "d3-rails"
 
-  s.add_dependency "railties", ">= 3.1.0", "< 5.0"
-  s.add_dependency "thor",     "~> 0.14"
+  s.add_dependency "railties", ">= 3.1"
+  s.add_development_dependency "rails", ">= 3.1"
 
   s.files        = `git ls-files`.split("\n")
-  s.executables  = `git ls-files -- bin/*`.split("\n").map { |f| File.basename(f) }
   s.require_path = 'lib'
 end
