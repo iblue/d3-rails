@@ -7,4 +7,4 @@ spec/support/*/public/javascripts
 imports/*
 .*.swp
 .*.swo
-
+Gemfile.lock
