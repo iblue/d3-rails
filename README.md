@@ -4,6 +4,10 @@
 
 d3-rails provides D3 for Rails 3.1.
 
+## Version
+
+d3-rails comes with version 2.9.1 of D3.js.
+
 
 ## Installation
 
