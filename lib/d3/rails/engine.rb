@@ -4,4 +4,3 @@ module D3
     end
   end
 end
-

@@ -19,4 +19,4 @@ Please note that D3 is provided via the asset pipeline and you do *not* need to 
 
 Then add it to your manifest file, most probably at `app/assets/javascripts/application.js`:
 
-    //= require d3
+    //= require d3.v2
