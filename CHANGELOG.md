@@ -1,3 +1,7 @@
+## 0.0.4 (20 May 2012)
+
+* Upgrade D3 to v2.9.2
+
 ## 0.0.3 (12 May 2012)
 
 * d3.js will also be available as d3.v2.js for compatibility reasons
