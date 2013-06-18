@@ -1,3 +1,8 @@
+## 3.2.0 (16 June 2013)
+
+* Upgrade D3 to 3.2.0
+* Have Gem verison mirror D3 version
+
 ## 0.0.4 (20 May 2012)
 
 * Upgrade D3 to v2.9.2
