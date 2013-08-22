@@ -7,8 +7,8 @@ Gem::Specification.new do |s|
   s.authors     = ["Markus Fenske"]
   s.email       = ["iblue@gmx.net"]
   s.homepage    = "https://github.com/iblue/d3-rails"
-  s.summary     = "D3 for Rails 3.1 Asset Pipeline"
-  s.description = "This gem provides D3 for Rails 3.1 Asset Pipeline."
+  s.summary     = "D3 for Rails 3 Asset Pipeline"
+  s.description = "This gem provides the Data-Driven Documents (D3) Javascript library for the Rails 3 Asset Pipeline."
 
   s.required_rubygems_version = ">= 1.3.6"
   s.rubyforge_project         = "d3-rails"

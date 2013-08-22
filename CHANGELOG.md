@@ -1,3 +1,8 @@
+## 3.2.8 (Unreleased)
+
+* Upgrade D3 to v3.2.8
+* New version numbering scheme, following D3 version number.
+
 ## 0.0.4 (20 May 2012)
 
 * Upgrade D3 to v2.9.2
