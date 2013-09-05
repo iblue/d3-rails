@@ -1,3 +1,7 @@
+## 3.3.3 (6 September 2013)
+
+* Upgrade D3 to 3.3.3
+
 ## 3.2.0 (16 June 2013)
 
 * Upgrade D3 to 3.2.0
