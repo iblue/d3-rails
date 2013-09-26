@@ -1,3 +1,8 @@
+## 3.3.5 (26 September 2013)
+
+* Upgrade D3 to 3.3.5
+* Compatibility with Rails 4
+
 ## 3.3.3 (6 September 2013)
 
 * Upgrade D3 to 3.3.3
