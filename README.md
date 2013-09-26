@@ -2,7 +2,7 @@
 
 [D3.js](http://github.com/mbostock/d3) is a JavaScript library for manipulating documents based on data. D3 helps you bring data to life using HTML, SVG and CSS.
 
-d3-rails provides D3 for Rails 3.1.
+d3-rails provides D3 for Rails 3.1 and higher.
 
 ## Version
 
