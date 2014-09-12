@@ -8,3 +8,4 @@ imports/*
 .*.swp
 .*.swo
 Gemfile.lock
+.project

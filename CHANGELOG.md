@@ -1,3 +1,7 @@
+## 3.4.11 (12 September 2014)
+
+* Upgrade D3 to 3.4.11
+
 ## 3.4.4 (2 April 2014)
 
 * Upgrade D3 to 3.4.4
