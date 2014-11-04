@@ -6,6 +6,7 @@ Gem::Specification.new do |s|
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Markus Fenske"]
   s.email       = ["iblue@gmx.net"]
+  s.license     = 'MIT'
   s.homepage    = "https://github.com/iblue/d3-rails"
   s.summary     = "D3 for Rails Asset Pipeline"
   s.description = "This gem provides D3 for Rails Asset Pipeline."
