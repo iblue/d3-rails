@@ -1,3 +1,7 @@
+## 3.5.2 (16 December 2014)
+
+* Upgrade D3 to 3.5.2
+
 ## 3.4.13 (3 November 2014)
 
 * Upgrade D3 to 3.4.13
