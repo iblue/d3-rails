@@ -21,3 +21,10 @@ Please note that D3 is provided via the asset pipeline and you do *not* need to 
 Then add it to your manifest file, most probably at `app/assets/javascripts/application.js`:
 
     //= require d3
+
+## Development
+
+To update D3 version in gem run rake task:
+```bash
+bundle exec rake d3:update_version
+```
