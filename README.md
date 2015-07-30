@@ -24,7 +24,7 @@ Then add it to your manifest file, most probably at `app/assets/javascripts/appl
 
 ## Development
 
-To update D3 version in gem run rake task:
+To update the D3 version contained in the gem, you can run the following rake task
 ```bash
 bundle exec rake d3:update_version
 ```
