@@ -6,7 +6,7 @@ d3-rails provides D3 for Rails 3.1 and higher.
 
 ## Version
 
-d3-rails comes with version 3.5.6 of D3.js. and will track the always
+d3-rails comes with version 3.5.11 of D3.js. and will track the always
 mirror the version of D3 it comes with.
 
 
