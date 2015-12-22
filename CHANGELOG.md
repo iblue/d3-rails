@@ -1,3 +1,7 @@
+## 3.5.12 (22 December 2015)
+
+* Upgrade D3 to 3.5.12
+
 ## 3.5.11 (15 December 2015)
 
 * Upgrade D3 to 3.5.11
