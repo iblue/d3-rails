@@ -1,3 +1,6 @@
+## 3.5.17 (3 July 2016)
+* Upgrade D3 to 3.5.17
+
 ## 3.5.16 (28 March 2016)
 * Upgrade D3 to 3.5.16
 
