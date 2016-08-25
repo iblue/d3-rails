@@ -1,11 +1,11 @@
-// https://d3js.org Version 4.1.0. Copyright 2016 Mike Bostock.
+// https://d3js.org Version 4.2.2. Copyright 2016 Mike Bostock.
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
   typeof define === 'function' && define.amd ? define(['exports'], factory) :
   (factory((global.d3 = global.d3 || {})));
-}(this, function (exports) { 'use strict';
+}(this, (function (exports) { 'use strict';
 
-  var version = "4.1.0";
+  var version = "4.2.2";
 
   function ascending(a, b) {
     return a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN;
@@ -4808,15 +4808,15 @@ var   tau$1 = 2 * pi$1;
 
       // If callback is non-null, it will be used for error and load events.
       send: function(method, data, callback) {
-        if (!callback && typeof data === "function") callback = data, data = null;
-        if (callback && callback.length === 1) callback = fixCallback(callback);
         xhr.open(method, url, true, user, password);
         if (mimeType != null && !headers.has("accept")) headers.set("accept", mimeType + ",*/*");
         if (xhr.setRequestHeader) headers.each(function(value, name) { xhr.setRequestHeader(name, value); });
         if (mimeType != null && xhr.overrideMimeType) xhr.overrideMimeType(mimeType);
         if (responseType != null) xhr.responseType = responseType;
         if (timeout > 0) xhr.timeout = timeout;
-        if (callback) request.on("error", callback).on("load", function(xhr) { callback(null, xhr); });
+        if (callback == null && typeof data === "function") callback = data, data = null;
+        if (callback != null && callback.length === 1) callback = fixCallback(callback);
+        if (callback != null) request.on("error", callback).on("load", function(xhr) { callback(null, xhr); });
         event.call("beforesend", request, xhr);
         xhr.send(data == null ? null : data);
         return request;
@@ -4833,9 +4833,12 @@ var   tau$1 = 2 * pi$1;
       }
     };
 
-    return callback
-        ? request.get(callback)
-        : request;
+    if (callback != null) {
+      if (typeof callback !== "function") throw new Error("invalid callback: " + callback);
+      return request.get(callback);
+    }
+
+    return request;
   }
 
   function fixCallback(callback) {
@@ -4854,7 +4857,11 @@ var   tau$1 = 2 * pi$1;
   function type(defaultMimeType, response) {
     return function(url, callback) {
       var r = request(url).mimeType(defaultMimeType).response(response);
-      return callback ? r.get(callback) : r;
+      if (callback != null) {
+        if (typeof callback !== "function") throw new Error("invalid callback: " + callback);
+        return r.get(callback);
+      }
+      return r;
     };
   }
 
@@ -5620,9 +5627,6 @@ var   t1$1 = new Date;
   }
 
   var locale;
-  exports.format;
-  exports.formatPrefix;
-
   defaultLocale({
     decimal: ".",
     thousands: ",",
@@ -6178,11 +6182,6 @@ var   t1$1 = new Date;
   }
 
   var locale$1;
-  exports.timeFormat;
-  exports.timeParse;
-  exports.utcFormat;
-  exports.utcParse;
-
   defaultLocale$1({
     dateTime: "%x, %X",
     date: "%-m/%-d/%Y",
@@ -8815,9 +8814,10 @@ var   epsilon$2 = 1e-6;
   }
 
   function center(scale) {
-    var width = scale.bandwidth() / 2;
+    var offset = scale.bandwidth() / 2;
+    if (scale.round()) offset = Math.round(offset);
     return function(d) {
-      return scale(d) + width;
+      return scale(d) + offset;
     };
   }
 
@@ -8868,7 +8868,7 @@ var   epsilon$2 = 1e-6;
           .attr("fill", "#000")
           .attr(x, k * spacing)
           .attr(y, 0.5)
-          .attr("dy", orient === top ? "0em" : orient === bottom ? ".71em" : ".32em"));
+          .attr("dy", orient === top ? "0em" : orient === bottom ? "0.71em" : "0.32em"));
 
       if (context !== selection) {
         path = path.transition(context);
@@ -11948,7 +11948,7 @@ var   keyPrefix$1 = "$";
     };
 
     voronoi.size = function(_) {
-      return arguments.length ? (extent = _ == null ? null : [[0, 0], [+_[0], +_[1]]], voronoi) : extent && [extent[1][0], extent[1][1]];
+      return arguments.length ? (extent = _ == null ? null : [[0, 0], [+_[0], +_[1]]], voronoi) : extent && [extent[1][0] - extent[0][0], extent[1][1] - extent[0][1]];
     };
 
     return voronoi;
@@ -12060,13 +12060,9 @@ var   keyPrefix$1 = "$";
         duration = 250,
         gestures = [],
         listeners = dispatch("start", "zoom", "end"),
-        mousemoving,
-        mousePoint,
-        mouseLocation,
         touchstarting,
         touchending,
         touchDelay = 500,
-        wheelTimer,
         wheelDelay = 150;
 
     function zoom(selection) {
@@ -12180,6 +12176,7 @@ var   keyPrefix$1 = "$";
       this.args = args;
       this.index = -1;
       this.active = 0;
+      this.extent = extent.apply(that, args);
     }
 
     Gesture.prototype = {
@@ -12191,7 +12188,7 @@ var   keyPrefix$1 = "$";
         return this;
       },
       zoom: function(key, transform) {
-        if (mousePoint && key !== "mouse") mouseLocation = transform.invert(mousePoint);
+        if (this.mouse && key !== "mouse") this.mouse[1] = transform.invert(this.mouse[0]);
         if (this.touch0 && key !== "touch") this.touch0[1] = transform.invert(this.touch0[0]);
         if (this.touch1 && key !== "touch") this.touch1[1] = transform.invert(this.touch1[0]);
         this.that.__zoom = transform;
@@ -12201,7 +12198,6 @@ var   keyPrefix$1 = "$";
       end: function() {
         if (--this.active === 0) {
           gestures.splice(this.index, 1);
-          mousePoint = mouseLocation = null;
           this.index = -1;
           this.emit("end");
         }
@@ -12216,16 +12212,16 @@ var   keyPrefix$1 = "$";
       if (!filter.apply(this, arguments)) return;
       var g = gesture(this, arguments),
           t = this.__zoom,
-          k = Math.max(k0, Math.min(k1, t.k * Math.pow(2, -exports.event.deltaY * (exports.event.deltaMode ? 120 : 1) / 500)));
+          k = Math.max(k0, Math.min(k1, t.k * Math.pow(2, -exports.event.deltaY * (exports.event.deltaMode ? 120 : 1) / 500))),
+          p = mouse(this);
 
       // If the mouse is in the same location as before, reuse it.
       // If there were recent wheel events, reset the wheel idle timeout.
-      if (wheelTimer) {
-        var point = mouse(this);
-        if (mousePoint[0] !== point[0] || mousePoint[1] !== point[1]) {
-          mouseLocation = t.invert(mousePoint = point);
+      if (g.wheel) {
+        if (g.mouse[0][0] !== p[0] || g.mouse[0][1] !== p[1]) {
+          g.mouse[1] = t.invert(g.mouse[0] = p);
         }
-        clearTimeout(wheelTimer);
+        clearTimeout(g.wheel);
       }
 
       // If this wheel event won’t trigger a transform change, ignore it.
@@ -12233,18 +12229,17 @@ var   keyPrefix$1 = "$";
 
       // Otherwise, capture the mouse point and location at the start.
       else {
-        g.extent = extent.apply(this, arguments);
-        mouseLocation = t.invert(mousePoint = mouse(this));
+        g.mouse = [p, t.invert(p)];
         interrupt(this);
         g.start();
       }
 
       noevent$1();
-      wheelTimer = setTimeout(wheelidled, wheelDelay);
-      g.zoom("mouse", constrain(translate(scale(t, k), mousePoint, mouseLocation), g.extent));
+      g.wheel = setTimeout(wheelidled, wheelDelay);
+      g.zoom("mouse", constrain(translate(scale(t, k), g.mouse[0], g.mouse[1]), g.extent));
 
       function wheelidled() {
-        wheelTimer = null;
+        g.wheel = null;
         g.end();
       }
     }
@@ -12252,25 +12247,24 @@ var   keyPrefix$1 = "$";
     function mousedowned() {
       if (touchending || !filter.apply(this, arguments)) return;
       var g = gesture(this, arguments),
-          v = select(exports.event.view).on("mousemove.zoom", mousemoved, true).on("mouseup.zoom", mouseupped, true);
+          v = select(exports.event.view).on("mousemove.zoom", mousemoved, true).on("mouseup.zoom", mouseupped, true),
+          p = mouse(this);
 
       dragDisable(exports.event.view);
       nopropagation$1();
-      mousemoving = false;
-      g.extent = extent.apply(this, arguments);
-      mouseLocation = this.__zoom.invert(mousePoint = mouse(this));
+      g.mouse = [p, this.__zoom.invert(p)];
       interrupt(this);
       g.start();
 
       function mousemoved() {
         noevent$1();
-        mousemoving = true;
-        g.zoom("mouse", constrain(translate(g.that.__zoom, mousePoint = mouse(g.that), mouseLocation), g.extent));
+        g.moved = true;
+        g.zoom("mouse", constrain(translate(g.that.__zoom, g.mouse[0] = mouse(g.that), g.mouse[1]), g.extent));
       }
 
       function mouseupped() {
         v.on("mousemove.zoom mouseup.zoom", null);
-        dragEnable(exports.event.view, mousemoving);
+        dragEnable(exports.event.view, g.moved);
         noevent$1();
         g.end();
       }
@@ -12309,7 +12303,6 @@ var   keyPrefix$1 = "$";
       if (exports.event.touches.length === n) {
         touchstarting = setTimeout(function() { touchstarting = null; }, touchDelay);
         interrupt(this);
-        g.extent = extent.apply(this, arguments);
         g.start();
       }
     }
@@ -13294,7 +13287,7 @@ var   keyPrefix$1 = "$";
     stream.polygonEnd();
   }
 
-  function stream(object, stream) {
+  function geoStream(object, stream) {
     if (object && streamObjectType.hasOwnProperty(object.type)) {
       streamObjectType[object.type](object, stream);
     } else {
@@ -13302,9 +13295,9 @@ var   keyPrefix$1 = "$";
     }
   }
 
-  var areaRingSum;
+  var areaRingSum = adder();
 
-  var areaSum;
+  var areaSum = adder();
   var lambda00;
   var phi00;
   var lambda0;
@@ -13366,9 +13359,8 @@ var   keyPrefix$1 = "$";
   }
 
   function area$2(object) {
-    if (areaSum) areaSum.reset();
-    else areaSum = adder(), areaRingSum = adder();
-    stream(object, areaStream);
+    areaSum.reset();
+    geoStream(object, areaStream);
     return areaSum * 2;
   }
 
@@ -13412,7 +13404,7 @@ var   lambda0$1;
 var   lambda00$1;
 var   phi00$1;
   var p0;
-  var deltaSum;
+  var deltaSum = adder();
   var ranges;
 var   range$1;
   var boundsStream = {
@@ -13542,11 +13534,9 @@ var   range$1;
   function bounds(feature) {
     var i, n, a, b, merged, deltaMax, delta;
 
-    if (deltaSum) deltaSum.reset();
-    else deltaSum = adder();
     phi1 = lambda1 = -(lambda0$1 = phi0 = Infinity);
     ranges = [];
-    stream(feature, boundsStream);
+    geoStream(feature, boundsStream);
 
     // First, sort ranges by their minimum longitudes.
     if (n = ranges.length) {
@@ -13707,7 +13697,7 @@ var   phi00$2;
     X0 = Y0 = Z0 =
     X1 = Y1 = Z1 =
     X2 = Y2 = Z2 = 0;
-    stream(object, centroidStream);
+    geoStream(object, centroidStream);
 
     var x = X2,
         y = Y2,
@@ -14257,7 +14247,7 @@ var   phi00$2;
     };
   }
 
-  var lengthSum;
+  var lengthSum = adder();
 var   lambda0$2;
 var   sinPhi0$1;
 var   cosPhi0$1;
@@ -14300,9 +14290,8 @@ var   cosPhi0$1;
   }
 
   function length$2(object) {
-    if (lengthSum) lengthSum.reset();
-    else lengthSum = adder();
-    stream(object, lengthStream);
+    lengthSum.reset();
+    geoStream(object, lengthStream);
     return +lengthSum;
   }
 
@@ -14734,23 +14723,23 @@ var   y0$3;
     function path(object) {
       if (object) {
         if (typeof pointRadius === "function") contextStream.pointRadius(+pointRadius.apply(this, arguments));
-        stream(object, projectionStream(contextStream));
+        geoStream(object, projectionStream(contextStream));
       }
       return contextStream.result();
     }
 
     path.area = function(object) {
-      stream(object, projectionStream(areaStream$1));
+      geoStream(object, projectionStream(areaStream$1));
       return areaStream$1.result();
     };
 
     path.bounds = function(object) {
-      stream(object, projectionStream(boundsStream$1));
+      geoStream(object, projectionStream(boundsStream$1));
       return boundsStream$1.result();
     };
 
     path.centroid = function(object) {
-      stream(object, projectionStream(centroidStream$1));
+      geoStream(object, projectionStream(centroidStream$1));
       return centroidStream$1.result();
     };
 
@@ -14782,6 +14771,8 @@ var   y0$3;
         normal = [sin$1(lambda), -cos$1(lambda), 0],
         angle = 0,
         winding = 0;
+
+    sum$2.reset();
 
     for (var i = 0, n = polygon.length; i < n; ++i) {
       if (!(m = (ring = polygon[i]).length)) continue;
@@ -14834,9 +14825,7 @@ var   y0$3;
     // from the point to the South pole.  If it is zero, then the point is the
     // same side as the South pole.
 
-    var contains = (angle < -epsilon$4 || angle < epsilon$4 && sum$2 < -epsilon$4) ^ (winding & 1);
-    sum$2.reset();
-    return contains;
+    return (angle < -epsilon$4 || angle < epsilon$4 && sum$2 < -epsilon$4) ^ (winding & 1);
   }
 
   function clip(pointVisible, clipLine, interpolate, start) {
@@ -15263,6 +15252,43 @@ var   y0$3;
     polygonEnd: function() { this.stream.polygonEnd(); }
   };
 
+  function fit(project, extent, object) {
+    var w = extent[1][0] - extent[0][0],
+        h = extent[1][1] - extent[0][1],
+        clip = project.clipExtent && project.clipExtent();
+
+    project
+        .scale(150)
+        .translate([0, 0]);
+
+    if (clip != null) project.clipExtent(null);
+
+    geoStream(object, project.stream(boundsStream$1));
+
+    var b = boundsStream$1.result(),
+        k = Math.min(w / (b[1][0] - b[0][0]), h / (b[1][1] - b[0][1])),
+        x = +extent[0][0] + (w - k * (b[1][0] + b[0][0])) / 2,
+        y = +extent[0][1] + (h - k * (b[1][1] + b[0][1])) / 2;
+
+    if (clip != null) project.clipExtent(clip);
+
+    return project
+        .scale(k * 150)
+        .translate([x, y]);
+  }
+
+  function fitSize(project) {
+    return function(size, object) {
+      return fit(project, [[0, 0], size], object);
+    };
+  }
+
+  function fitExtent(project) {
+    return function(extent, object) {
+      return fit(project, extent, object);
+    };
+  }
+
   var maxDepth = 16;
   var cosMinDistance = cos$1(30 * radians);
   // cos(minimum angular distance)
@@ -15431,6 +15457,10 @@ var   y0$3;
       return arguments.length ? (projectResample = resample(projectTransform, delta2 = _ * _), reset()) : sqrt$1(delta2);
     };
 
+    projection.fitExtent = fitExtent(projection);
+
+    projection.fitSize = fitSize(projection);
+
     function recenter() {
       projectRotate = compose(rotate = rotateRadians(deltaLambda, deltaPhi, deltaGamma), project);
       var center = project(lambda, phi);
@@ -15485,8 +15515,8 @@ var   y0$3;
 
   function conicEqualArea() {
     return conicProjection(conicEqualAreaRaw)
-        .scale(151)
-        .translate([480, 347]);
+        .scale(155.424)
+        .center([0, 33.6442]);
   }
 
   function albers() {
@@ -15513,8 +15543,9 @@ var   y0$3;
   }
 
   // A composite projection for the United States, configured by default for
-  // 960×500. Also works quite well at 960×600 with scale 1285. The set of
-  // standard parallels for each region comes from USGS, which is published here:
+  // 960×500. The projection also works quite well at 960×600 if you change the
+  // scale to 1285 and adjust the translate accordingly. The set of standard
+  // parallels for each region comes from USGS, which is published here:
   // http://egsc.usgs.gov/isb/pubs/MapProjections/projections.html#albers
   function albersUsa() {
     var cache,
@@ -15580,6 +15611,10 @@ var   y0$3;
       return albersUsa;
     };
 
+    albersUsa.fitExtent = fitExtent(albersUsa);
+
+    albersUsa.fitSize = fitSize(albersUsa);
+
     return albersUsa.scale(1070);
   }
 
@@ -15618,7 +15653,7 @@ var   y0$3;
 
   function azimuthalEqualArea() {
     return projection(azimuthalEqualAreaRaw)
-        .scale(120)
+        .scale(124.75)
         .clipAngle(180 - 1e-3);
   }
 
@@ -15632,7 +15667,7 @@ var   y0$3;
 
   function azimuthalEquidistant() {
     return projection(azimuthalEquidistantRaw)
-        .scale(480 / tau$4)
+        .scale(79.4188)
         .clipAngle(180 - 1e-3);
   }
 
@@ -15645,7 +15680,8 @@ var   y0$3;
   };
 
   function mercator() {
-    return mercatorProjection(mercatorRaw);
+    return mercatorProjection(mercatorRaw)
+        .scale(961 / tau$4);
   }
 
   function mercatorProjection(project) {
@@ -15666,14 +15702,15 @@ var   y0$3;
     m.clipExtent = function(_) {
       if (!arguments.length) return clipAuto ? null : clipExtent();
       if (clipAuto = _ == null) {
-        var k = pi$4 * scale(), t = translate();
+        var k = pi$4 * scale(),
+            t = translate();
         _ = [[t[0] - k, t[1] - k], [t[0] + k, t[1] + k]];
       }
       clipExtent(_);
       return m;
     };
 
-    return m.clipExtent(null).scale(961 / tau$4);
+    return m.clipExtent(null);
   }
 
   function tany(y) {
@@ -15703,7 +15740,9 @@ var   y0$3;
   }
 
   function conicConformal() {
-    return conicProjection(conicConformalRaw);
+    return conicProjection(conicConformalRaw)
+        .scale(109.5)
+        .parallels([30, 30]);
   }
 
   function equirectangularRaw(lambda, phi) {
@@ -15713,7 +15752,8 @@ var   y0$3;
   equirectangularRaw.invert = equirectangularRaw;
 
   function equirectangular() {
-    return projection(equirectangularRaw).scale(480 / pi$4);
+    return projection(equirectangularRaw)
+        .scale(152.63);
   }
 
   function conicEquidistantRaw(y0, y1) {
@@ -15738,8 +15778,8 @@ var   y0$3;
 
   function conicEquidistant() {
     return conicProjection(conicEquidistantRaw)
-        .scale(128)
-        .translate([480, 280]);
+        .scale(131.154)
+        .center([0, 13.9389]);
   }
 
   function gnomonicRaw(x, y) {
@@ -15751,7 +15791,7 @@ var   y0$3;
 
   function gnomonic() {
     return projection(gnomonicRaw)
-        .scale(139)
+        .scale(144.049)
         .clipAngle(60);
   }
 
@@ -15763,7 +15803,7 @@ var   y0$3;
 
   function orthographic() {
     return projection(orthographicRaw)
-        .scale(240)
+        .scale(249.5)
         .clipAngle(90 + epsilon$4);
   }
 
@@ -15773,12 +15813,12 @@ var   y0$3;
   }
 
   stereographicRaw.invert = azimuthalInvert(function(z) {
-    return 2 + atan(z);
+    return 2 * atan(z);
   });
 
   function stereographic() {
     return projection(stereographicRaw)
-        .scale(240)
+        .scale(250)
         .clipAngle(142);
   }
 
@@ -15803,7 +15843,8 @@ var   y0$3;
       return arguments.length ? rotate([_[0], _[1], _.length > 2 ? _[2] + 90 : 90]) : (_ = rotate(), [_[0], _[1], _[2] - 90]);
     };
 
-    return rotate([0, 0, 90]);
+    return rotate([0, 0, 90])
+        .scale(159.155);
   }
 
   exports.version = version;
@@ -16177,11 +16218,11 @@ var   y0$3;
   exports.geoRotation = rotation;
   exports.geoStereographic = stereographic;
   exports.geoStereographicRaw = stereographicRaw;
-  exports.geoStream = stream;
+  exports.geoStream = geoStream;
   exports.geoTransform = transform$1;
   exports.geoTransverseMercator = transverseMercator;
   exports.geoTransverseMercatorRaw = transverseMercatorRaw;
 
   Object.defineProperty(exports, '__esModule', { value: true });
 
-}));
+})));
