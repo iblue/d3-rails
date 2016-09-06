@@ -1,3 +1,6 @@
+## 4.2.2 (16 August 2016)
+* Upgrade D3 to 4.2.2
+
 ## 4.1.0 (7 July 2016)
 * Upgrade D3 to 4.1.0
 * Keep D3.v3 at 3.5.17
