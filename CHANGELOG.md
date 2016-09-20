@@ -1,3 +1,6 @@
+## 4.2.4 (20 September 2016)
+* Upgrade D3 to 4.2.4
+
 ## 4.2.2 (16 August 2016)
 * Upgrade D3 to 4.2.2
 
