@@ -8,7 +8,7 @@ d3-rails provides D3 for Rails 3.1 and higher.
 
 ## Version
 
-d3-rails comes with version 4.4.0 of D3.js. The d3-rails version will
+d3-rails comes with version 4.7.0 of D3.js. The d3-rails version will
 always mirror the version of D3. If you need a newer version of
 d3-rails, see section Development (below).
 
