@@ -1,3 +1,6 @@
+## 4.9.1 (16 May 2017)
+* Upgrade D3 to 4.9.1
+
 ## 4.9.0 (15 May 2017)
 * Upgrade D3 to 4.9.0
 

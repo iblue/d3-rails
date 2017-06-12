@@ -1,11 +1,11 @@
-// https://d3js.org Version 4.9.0. Copyright 2017 Mike Bostock.
+// https://d3js.org Version 4.9.1. Copyright 2017 Mike Bostock.
 (function (global, factory) {
 	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
 	typeof define === 'function' && define.amd ? define(['exports'], factory) :
 	(factory((global.d3 = global.d3 || {})));
 }(this, (function (exports) { 'use strict';
 
-var version = "4.9.0";
+var version = "4.9.1";
 
 var ascending = function(a, b) {
   return a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN;
@@ -8375,9 +8375,11 @@ function PathString() {
 }
 
 PathString.prototype = {
+  _radius: 4.5,
   _circle: circle$1(4.5),
   pointRadius: function(_) {
-    return this._circle = circle$1(_), this;
+    if ((_ = +_) !== this._radius) this._radius = _, this._circle = null;
+    return this;
   },
   polygonStart: function() {
     this._line = 0;
@@ -8404,6 +8406,7 @@ PathString.prototype = {
         break;
       }
       default: {
+        if (this._circle == null) this._circle = circle$1(this._radius);
         this._string.push("M", x, ",", y, this._circle);
         break;
       }
@@ -8414,6 +8417,8 @@ PathString.prototype = {
       var result = this._string.join("");
       this._string = [];
       return result;
+    } else {
+      return null;
     }
   }
 };
@@ -8738,7 +8743,7 @@ var clipCircle = function(radius, delta) {
         // TODO ignore if not clipping polygons.
         if (v !== v0) {
           point2 = intersect(point0, point1);
-          if (pointEqual(point0, point2) || pointEqual(point1, point2)) {
+          if (!point2 || pointEqual(point0, point2) || pointEqual(point1, point2)) {
             point1[0] += epsilon$2;
             point1[1] += epsilon$2;
             v = visible(point1[0], point1[1]);
@@ -13795,6 +13800,10 @@ var radialArea = function() {
 
 var slice$5 = Array.prototype.slice;
 
+var radialPoint = function(x, y) {
+  return [(y = +y) * Math.cos(x -= Math.PI / 2), y * Math.sin(x)];
+};
+
 function linkSource(d) {
   return d.source;
 }
@@ -13851,10 +13860,10 @@ function curveVertical(context, x0, y0, x1, y1) {
 }
 
 function curveRadial$1(context, x0, y0, x1, y1) {
-  var p0 = cartesian$1(x0, y0),
-      p1 = cartesian$1(x0, y0 = (y0 + y1) / 2),
-      p2 = cartesian$1(x1, y0),
-      p3 = cartesian$1(x1, y1);
+  var p0 = radialPoint(x0, y0),
+      p1 = radialPoint(x0, y0 = (y0 + y1) / 2),
+      p2 = radialPoint(x1, y0),
+      p3 = radialPoint(x1, y1);
   context.moveTo(p0[0], p0[1]);
   context.bezierCurveTo(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]);
 }
@@ -13872,11 +13881,6 @@ function linkRadial() {
   l.angle = l.x, delete l.x;
   l.radius = l.y, delete l.y;
   return l;
-}
-
-function cartesian$1(x$$1, y$$1) {
-  var angle = (x$$1 - 90) / 180 * Math.PI, radius = y$$1;
-  return [radius * Math.cos(angle), radius * Math.sin(angle)];
 }
 
 var circle$2 = {
