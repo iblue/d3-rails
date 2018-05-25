@@ -13,8 +13,6 @@ namespace :d3 do
         line.match(/((\d+\.)(\d+\.)(\*|\d+))/)
       }.first; $1
     }
-
-    # version = ` grep -Eom 1 '(\d+\.)(\d+\.)(\*|\d+)' app/assets/javascripts/d3.js`.strip
     message = <<-MSG
       Please update the version to #{version} manually in the following files:
       * CHANGELOG.md
