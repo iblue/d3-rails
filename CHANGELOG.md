@@ -1,3 +1,6 @@
+## 5.5.0 (31 July 2018)
+* Upgrade D3 to 5.5.0
+
 ## 5.4.0 (25 May 2018)
 * Upgrade D3 to 5.4.0
 
