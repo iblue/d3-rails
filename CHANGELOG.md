@@ -1,3 +1,6 @@
+## 5.16.0 (31 March 2021)
+* Upgrade D3 to 5.16.0
+
 ## 5.9.2 (28 May 2019)
 * Upgrade D3 to 5.9.2
 
