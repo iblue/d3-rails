@@ -4,10 +4,10 @@ Bundler::GemHelper.install_tasks
 namespace :d3 do
   desc 'Update d3 version'
   task :update_version do
-    `curl -o app/assets/javascripts/d3.js https://d3js.org/d3.v5.js`
-    `curl -o app/assets/javascripts/d3.min.js https://d3js.org/d3.v5.min.js`
-    `cp app/assets/javascripts/d3.js app/assets/javascripts/d3.v5.js`
-    `cp app/assets/javascripts/d3.min.js app/assets/javascripts/d3.v5.min.js`
+    `curl -o app/assets/javascripts/d3.js https://d3js.org/d3.v6.js`
+    `curl -o app/assets/javascripts/d3.min.js https://d3js.org/d3.v6.min.js`
+    `cp app/assets/javascripts/d3.js app/assets/javascripts/d3.v6.js`
+    `cp app/assets/javascripts/d3.min.js app/assets/javascripts/d3.v6.min.js`
     version = File.open("app/assets/javascripts/d3.js") { |f|
       f.each_line.lazy.select { |line|
         line.match(/((\d+\.)(\d+\.)(\*|\d+))/)

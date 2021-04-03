@@ -1,3 +1,7 @@
+## 6.6.2 (3 April 2021)
+* Update updater to update to version 6
+* Upgrade D3 to 6.6.3
+
 ## 5.16.0 (31 March 2021)
 * Upgrade D3 to 5.16.0
 
