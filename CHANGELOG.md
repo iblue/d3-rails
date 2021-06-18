@@ -1,3 +1,7 @@
+## 7.0.0 (18 June 2021)
+* Update updater to update to version 7
+* Upgrade D3 to 7.0.0
+
 ## 6.6.2 (3 April 2021)
 * Update updater to update to version 6
 * Upgrade D3 to 6.6.3
