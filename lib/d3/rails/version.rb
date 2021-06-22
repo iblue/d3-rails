@@ -1,5 +1,5 @@
 module D3
   module Rails
-    VERSION = "6.6.2"
+    VERSION = "7.0.0"
   end
 end
