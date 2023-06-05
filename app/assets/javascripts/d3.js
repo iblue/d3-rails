@@ -1,54 +1,67 @@
-// https://d3js.org v7.0.0 Copyright 2010-2021 Mike Bostock
+// https://d3js.org v7.8.5 Copyright 2010-2023 Mike Bostock
 (function (global, factory) {
 typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
 typeof define === 'function' && define.amd ? define(['exports'], factory) :
 (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.d3 = global.d3 || {}));
-}(this, (function (exports) { 'use strict';
+})(this, (function (exports) { 'use strict';
 
-var version = "7.0.0";
+var version = "7.8.5";
 
 function ascending$3(a, b) {
+  return a == null || b == null ? NaN : a < b ? -1 : a > b ? 1 : a >= b ? 0 : NaN;
+}
+
+function descending$2(a, b) {
   return a == null || b == null ? NaN
-    : a < b ? -1
-    : a > b ? 1
-    : a >= b ? 0
+    : b < a ? -1
+    : b > a ? 1
+    : b >= a ? 0
     : NaN;
 }
 
 function bisector(f) {
-  let delta = f;
-  let compare = f;
+  let compare1, compare2, delta;
 
-  if (f.length === 1) {
+  // If an accessor is specified, promote it to a comparator. In this case we
+  // can test whether the search value is (self-) comparable. We can’t do this
+  // for a comparator (except for specific, known comparators) because we can’t
+  // tell if the comparator is symmetric, and an asymmetric comparator can’t be
+  // used to test whether a single value is comparable.
+  if (f.length !== 2) {
+    compare1 = ascending$3;
+    compare2 = (d, x) => ascending$3(f(d), x);
     delta = (d, x) => f(d) - x;
-    compare = ascendingComparator(f);
+  } else {
+    compare1 = f === ascending$3 || f === descending$2 ? f : zero$1;
+    compare2 = f;
+    delta = f;
   }
 
-  function left(a, x, lo, hi) {
-    if (lo == null) lo = 0;
-    if (hi == null) hi = a.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (compare(a[mid], x) < 0) lo = mid + 1;
-      else hi = mid;
+  function left(a, x, lo = 0, hi = a.length) {
+    if (lo < hi) {
+      if (compare1(x, x) !== 0) return hi;
+      do {
+        const mid = (lo + hi) >>> 1;
+        if (compare2(a[mid], x) < 0) lo = mid + 1;
+        else hi = mid;
+      } while (lo < hi);
     }
     return lo;
   }
 
-  function right(a, x, lo, hi) {
-    if (lo == null) lo = 0;
-    if (hi == null) hi = a.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (compare(a[mid], x) > 0) hi = mid;
-      else lo = mid + 1;
+  function right(a, x, lo = 0, hi = a.length) {
+    if (lo < hi) {
+      if (compare1(x, x) !== 0) return hi;
+      do {
+        const mid = (lo + hi) >>> 1;
+        if (compare2(a[mid], x) <= 0) lo = mid + 1;
+        else hi = mid;
+      } while (lo < hi);
     }
     return lo;
   }
 
-  function center(a, x, lo, hi) {
-    if (lo == null) lo = 0;
-    if (hi == null) hi = a.length;
+  function center(a, x, lo = 0, hi = a.length) {
     const i = left(a, x, lo, hi - 1);
     return i > lo && delta(a[i - 1], x) > -delta(a[i], x) ? i - 1 : i;
   }
@@ -56,8 +69,8 @@ function bisector(f) {
   return {left, center, right};
 }
 
-function ascendingComparator(f) {
-  return (d, x) => ascending$3(f(d), x);
+function zero$1() {
+  return 0;
 }
 
 function number$3(x) {
@@ -85,6 +98,123 @@ const ascendingBisect = bisector(ascending$3);
 const bisectRight = ascendingBisect.right;
 const bisectLeft = ascendingBisect.left;
 const bisectCenter = bisector(number$3).center;
+var bisect = bisectRight;
+
+function blur(values, r) {
+  if (!((r = +r) >= 0)) throw new RangeError("invalid r");
+  let length = values.length;
+  if (!((length = Math.floor(length)) >= 0)) throw new RangeError("invalid length");
+  if (!length || !r) return values;
+  const blur = blurf(r);
+  const temp = values.slice();
+  blur(values, temp, 0, length, 1);
+  blur(temp, values, 0, length, 1);
+  blur(values, temp, 0, length, 1);
+  return values;
+}
+
+const blur2 = Blur2(blurf);
+
+const blurImage = Blur2(blurfImage);
+
+function Blur2(blur) {
+  return function(data, rx, ry = rx) {
+    if (!((rx = +rx) >= 0)) throw new RangeError("invalid rx");
+    if (!((ry = +ry) >= 0)) throw new RangeError("invalid ry");
+    let {data: values, width, height} = data;
+    if (!((width = Math.floor(width)) >= 0)) throw new RangeError("invalid width");
+    if (!((height = Math.floor(height !== undefined ? height : values.length / width)) >= 0)) throw new RangeError("invalid height");
+    if (!width || !height || (!rx && !ry)) return data;
+    const blurx = rx && blur(rx);
+    const blury = ry && blur(ry);
+    const temp = values.slice();
+    if (blurx && blury) {
+      blurh(blurx, temp, values, width, height);
+      blurh(blurx, values, temp, width, height);
+      blurh(blurx, temp, values, width, height);
+      blurv(blury, values, temp, width, height);
+      blurv(blury, temp, values, width, height);
+      blurv(blury, values, temp, width, height);
+    } else if (blurx) {
+      blurh(blurx, values, temp, width, height);
+      blurh(blurx, temp, values, width, height);
+      blurh(blurx, values, temp, width, height);
+    } else if (blury) {
+      blurv(blury, values, temp, width, height);
+      blurv(blury, temp, values, width, height);
+      blurv(blury, values, temp, width, height);
+    }
+    return data;
+  };
+}
+
+function blurh(blur, T, S, w, h) {
+  for (let y = 0, n = w * h; y < n;) {
+    blur(T, S, y, y += w, 1);
+  }
+}
+
+function blurv(blur, T, S, w, h) {
+  for (let x = 0, n = w * h; x < w; ++x) {
+    blur(T, S, x, x + n, w);
+  }
+}
+
+function blurfImage(radius) {
+  const blur = blurf(radius);
+  return (T, S, start, stop, step) => {
+    start <<= 2, stop <<= 2, step <<= 2;
+    blur(T, S, start + 0, stop + 0, step);
+    blur(T, S, start + 1, stop + 1, step);
+    blur(T, S, start + 2, stop + 2, step);
+    blur(T, S, start + 3, stop + 3, step);
+  };
+}
+
+// Given a target array T, a source array S, sets each value T[i] to the average
+// of {S[i - r], …, S[i], …, S[i + r]}, where r = ⌊radius⌋, start <= i < stop,
+// for each i, i + step, i + 2 * step, etc., and where S[j] is clamped between
+// S[start] (inclusive) and S[stop] (exclusive). If the given radius is not an
+// integer, S[i - r - 1] and S[i + r + 1] are added to the sum, each weighted
+// according to r - ⌊radius⌋.
+function blurf(radius) {
+  const radius0 = Math.floor(radius);
+  if (radius0 === radius) return bluri(radius);
+  const t = radius - radius0;
+  const w = 2 * radius + 1;
+  return (T, S, start, stop, step) => { // stop must be aligned!
+    if (!((stop -= step) >= start)) return; // inclusive stop
+    let sum = radius0 * S[start];
+    const s0 = step * radius0;
+    const s1 = s0 + step;
+    for (let i = start, j = start + s0; i < j; i += step) {
+      sum += S[Math.min(stop, i)];
+    }
+    for (let i = start, j = stop; i <= j; i += step) {
+      sum += S[Math.min(stop, i + s0)];
+      T[i] = (sum + t * (S[Math.max(start, i - s1)] + S[Math.min(stop, i + s1)])) / w;
+      sum -= S[Math.max(start, i - s0)];
+    }
+  };
+}
+
+// Like blurf, but optimized for integer radius.
+function bluri(radius) {
+  const w = 2 * radius + 1;
+  return (T, S, start, stop, step) => { // stop must be aligned!
+    if (!((stop -= step) >= start)) return; // inclusive stop
+    let sum = radius * S[start];
+    const s = step * radius;
+    for (let i = start, j = start + s; i < j; i += step) {
+      sum += S[Math.min(stop, i)];
+    }
+    for (let i = start, j = stop; i <= j; i += step) {
+      sum += S[Math.min(stop, i + s)];
+      T[i] = sum / w;
+      sum -= S[Math.max(start, i - s)];
+    }
+  };
+}
 
 function count$1(values, valueof) {
   let count = 0;
@@ -144,14 +274,6 @@ function cumsum(values, valueof) {
   return Float64Array.from(values, valueof === undefined
     ? v => (sum += +v || 0)
     : v => (sum += +valueof(v, index++, values) || 0));
-}
-
-function descending$2(a, b) {
-  return a == null || b == null ? NaN
-    : b < a ? -1
-    : b > a ? 1
-    : b >= a ? 0
-    : NaN;
 }
 
 function variance(values, valueof) {
@@ -337,7 +459,7 @@ function intern_set({_intern, _key}, value) {
 function intern_delete({_intern, _key}, value) {
   const key = _key(value);
   if (_intern.has(key)) {
-    value = _intern.get(value);
+    value = _intern.get(key);
     _intern.delete(key);
   }
   return value;
@@ -421,28 +543,42 @@ function permute(source, keys) {
 function sort(values, ...F) {
   if (typeof values[Symbol.iterator] !== "function") throw new TypeError("values is not iterable");
   values = Array.from(values);
-  let [f = ascending$3] = F;
-  if (f.length === 1 || F.length > 1) {
+  let [f] = F;
+  if ((f && f.length !== 2) || F.length > 1) {
     const index = Uint32Array.from(values, (d, i) => i);
     if (F.length > 1) {
       F = F.map(f => values.map(f));
       index.sort((i, j) => {
         for (const f of F) {
-          const c = ascending$3(f[i], f[j]);
+          const c = ascendingDefined(f[i], f[j]);
           if (c) return c;
         }
       });
     } else {
       f = values.map(f);
-      index.sort((i, j) => ascending$3(f[i], f[j]));
+      index.sort((i, j) => ascendingDefined(f[i], f[j]));
     }
     return permute(values, index);
   }
-  return values.sort(f);
+  return values.sort(compareDefined(f));
+}
+
+function compareDefined(compare = ascending$3) {
+  if (compare === ascending$3) return ascendingDefined;
+  if (typeof compare !== "function") throw new TypeError("compare is not a function");
+  return (a, b) => {
+    const x = compare(a, b);
+    if (x || x === 0) return x;
+    return (compare(b, b) === 0) - (compare(a, a) === 0);
+  };
+}
+
+function ascendingDefined(a, b) {
+  return (a == null || !(a >= a)) - (b == null || !(b >= b)) || (a < b ? -1 : a > b ? 1 : 0);
 }
 
 function groupSort(values, reduce, key) {
-  return (reduce.length === 1
+  return (reduce.length !== 2
     ? sort(rollup(values, reduce, key), (([ak, av], [bk, bv]) => ascending$3(av, bv) || ascending$3(ak, bk)))
     : sort(group(values, key), (([ak, av], [bk, bv]) => reduce(av, bv) || ascending$3(ak, bk))))
     .map(([key]) => key);
@@ -453,64 +589,63 @@ var array$5 = Array.prototype;
 var slice$3 = array$5.slice;
 
 function constant$b(x) {
-  return function() {
-    return x;
-  };
+  return () => x;
 }
 
-var e10 = Math.sqrt(50),
+const e10 = Math.sqrt(50),
     e5 = Math.sqrt(10),
     e2 = Math.sqrt(2);
 
-function ticks(start, stop, count) {
-  var reverse,
-      i = -1,
-      n,
-      ticks,
-      step;
-
-  stop = +stop, start = +start, count = +count;
-  if (start === stop && count > 0) return [start];
-  if (reverse = stop < start) n = start, start = stop, stop = n;
-  if ((step = tickIncrement(start, stop, count)) === 0 || !isFinite(step)) return [];
-
-  if (step > 0) {
-    let r0 = Math.round(start / step), r1 = Math.round(stop / step);
-    if (r0 * step < start) ++r0;
-    if (r1 * step > stop) --r1;
-    ticks = new Array(n = r1 - r0 + 1);
-    while (++i < n) ticks[i] = (r0 + i) * step;
+function tickSpec(start, stop, count) {
+  const step = (stop - start) / Math.max(0, count),
+      power = Math.floor(Math.log10(step)),
+      error = step / Math.pow(10, power),
+      factor = error >= e10 ? 10 : error >= e5 ? 5 : error >= e2 ? 2 : 1;
+  let i1, i2, inc;
+  if (power < 0) {
+    inc = Math.pow(10, -power) / factor;
+    i1 = Math.round(start * inc);
+    i2 = Math.round(stop * inc);
+    if (i1 / inc < start) ++i1;
+    if (i2 / inc > stop) --i2;
+    inc = -inc;
   } else {
-    step = -step;
-    let r0 = Math.round(start * step), r1 = Math.round(stop * step);
-    if (r0 / step < start) ++r0;
-    if (r1 / step > stop) --r1;
-    ticks = new Array(n = r1 - r0 + 1);
-    while (++i < n) ticks[i] = (r0 + i) / step;
+    inc = Math.pow(10, power) * factor;
+    i1 = Math.round(start / inc);
+    i2 = Math.round(stop / inc);
+    if (i1 * inc < start) ++i1;
+    if (i2 * inc > stop) --i2;
   }
+  if (i2 < i1 && 0.5 <= count && count < 2) return tickSpec(start, stop, count * 2);
+  return [i1, i2, inc];
+}
 
-  if (reverse) ticks.reverse();
-
+function ticks(start, stop, count) {
+  stop = +stop, start = +start, count = +count;
+  if (!(count > 0)) return [];
+  if (start === stop) return [start];
+  const reverse = stop < start, [i1, i2, inc] = reverse ? tickSpec(stop, start, count) : tickSpec(start, stop, count);
+  if (!(i2 >= i1)) return [];
+  const n = i2 - i1 + 1, ticks = new Array(n);
+  if (reverse) {
+    if (inc < 0) for (let i = 0; i < n; ++i) ticks[i] = (i2 - i) / -inc;
+    else for (let i = 0; i < n; ++i) ticks[i] = (i2 - i) * inc;
+  } else {
+    if (inc < 0) for (let i = 0; i < n; ++i) ticks[i] = (i1 + i) / -inc;
+    else for (let i = 0; i < n; ++i) ticks[i] = (i1 + i) * inc;
+  }
   return ticks;
 }
 
 function tickIncrement(start, stop, count) {
-  var step = (stop - start) / Math.max(0, count),
-      power = Math.floor(Math.log(step) / Math.LN10),
-      error = step / Math.pow(10, power);
-  return power >= 0
-      ? (error >= e10 ? 10 : error >= e5 ? 5 : error >= e2 ? 2 : 1) * Math.pow(10, power)
-      : -Math.pow(10, -power) / (error >= e10 ? 10 : error >= e5 ? 5 : error >= e2 ? 2 : 1);
+  stop = +stop, start = +start, count = +count;
+  return tickSpec(start, stop, count)[2];
 }
 
 function tickStep(start, stop, count) {
-  var step0 = Math.abs(stop - start) / Math.max(0, count),
-      step1 = Math.pow(10, Math.floor(Math.log(step0) / Math.LN10)),
-      error = step0 / step1;
-  if (error >= e10) step1 *= 10;
-  else if (error >= e5) step1 *= 5;
-  else if (error >= e2) step1 *= 2;
-  return stop < start ? -step1 : step1;
+  stop = +stop, start = +start, count = +count;
+  const reverse = stop < start, inc = reverse ? tickIncrement(stop, start, count) : tickIncrement(start, stop, count);
+  return (reverse ? -1 : 1) * (inc < 0 ? 1 / -inc : inc);
 }
 
 function nice$1(start, stop, count) {
@@ -531,7 +666,7 @@ function nice$1(start, stop, count) {
 }
 
 function thresholdSturges(values) {
-  return Math.ceil(Math.log(count$1(values)) / Math.LN2) + 1;
+  return Math.max(1, Math.ceil(Math.log(count$1(values)) / Math.LN2) + 1);
 }
 
 function bin() {
@@ -545,6 +680,7 @@ function bin() {
     var i,
         n = data.length,
         x,
+        step,
         values = new Array(n);
 
     for (i = 0; i < n; ++i) {
@@ -562,6 +698,11 @@ function bin() {
       const max = x1, tn = +tz;
       if (domain === extent$1) [x0, x1] = nice$1(x0, x1, tn);
       tz = ticks(x0, x1, tn);
+
+      // If the domain is aligned with the first tick (which it will by
+      // default), then we can use quantization rather than bisection to bin
+      // values, which is substantially faster.
+      if (tz[0] <= x0) step = tickIncrement(x0, x1, tn);
 
       // If the last threshold is coincident with the domain’s upper bound, the
       // last bin will be zero-width. If the default domain is used, and this
@@ -587,9 +728,11 @@ function bin() {
     }
 
     // Remove any thresholds outside the domain.
-    var m = tz.length;
-    while (tz[0] <= x0) tz.shift(), --m;
-    while (tz[m - 1] > x1) tz.pop(), --m;
+    // Be careful not to mutate an array owned by the user!
+    var m = tz.length, a = 0, b = m;
+    while (tz[a] <= x0) ++a;
+    while (tz[b - 1] > x1) --b;
+    if (a || b < m) tz = tz.slice(a, b), m = b - a;
 
     var bins = new Array(m + 1),
         bin;
@@ -602,10 +745,26 @@ function bin() {
     }
 
     // Assign data to bins by value, ignoring any outside the domain.
-    for (i = 0; i < n; ++i) {
-      x = values[i];
-      if (x != null && x0 <= x && x <= x1) {
-        bins[bisectRight(tz, x, 0, m)].push(data[i]);
+    if (isFinite(step)) {
+      if (step > 0) {
+        for (i = 0; i < n; ++i) {
+          if ((x = values[i]) != null && x0 <= x && x <= x1) {
+            bins[Math.min(m, Math.floor((x - x0) / step))].push(data[i]);
+          }
+        }
+      } else if (step < 0) {
+        for (i = 0; i < n; ++i) {
+          if ((x = values[i]) != null && x0 <= x && x <= x1) {
+            const j = Math.floor((x0 - x) * step);
+            bins[Math.min(m, j + (tz[j] <= x))].push(data[i]); // handle off-by-one due to rounding
+          }
+        }
+      }
+    } else {
+      for (i = 0; i < n; ++i) {
+        if ((x = values[i]) != null && x0 <= x && x <= x1) {
+          bins[bisect(tz, x, 0, m)].push(data[i]);
+        }
       }
     }
 
@@ -621,7 +780,7 @@ function bin() {
   };
 
   histogram.thresholds = function(_) {
-    return arguments.length ? (threshold = typeof _ === "function" ? _ : Array.isArray(_) ? constant$b(slice$3.call(_)) : constant$b(_), histogram) : threshold;
+    return arguments.length ? (threshold = typeof _ === "function" ? _ : constant$b(Array.isArray(_) ? slice$3.call(_) : _), histogram) : threshold;
   };
 
   return histogram;
@@ -648,6 +807,29 @@ function max$3(values, valueof) {
   return max;
 }
 
+function maxIndex(values, valueof) {
+  let max;
+  let maxIndex = -1;
+  let index = -1;
+  if (valueof === undefined) {
+    for (const value of values) {
+      ++index;
+      if (value != null
+          && (max < value || (max === undefined && value >= value))) {
+        max = value, maxIndex = index;
+      }
+    }
+  } else {
+    for (let value of values) {
+      if ((value = valueof(value, ++index, values)) != null
+          && (max < value || (max === undefined && value >= value))) {
+        max = value, maxIndex = index;
+      }
+    }
+  }
+  return maxIndex;
+}
+
 function min$2(values, valueof) {
   let min;
   if (valueof === undefined) {
@@ -669,9 +851,40 @@ function min$2(values, valueof) {
   return min;
 }
 
+function minIndex(values, valueof) {
+  let min;
+  let minIndex = -1;
+  let index = -1;
+  if (valueof === undefined) {
+    for (const value of values) {
+      ++index;
+      if (value != null
+          && (min > value || (min === undefined && value >= value))) {
+        min = value, minIndex = index;
+      }
+    }
+  } else {
+    for (let value of values) {
+      if ((value = valueof(value, ++index, values)) != null
+          && (min > value || (min === undefined && value >= value))) {
+        min = value, minIndex = index;
+      }
+    }
+  }
+  return minIndex;
+}
+
 // Based on https://github.com/mourner/quickselect
 // ISC license, Copyright 2018 Vladimir Agafonkin.
-function quickselect(array, k, left = 0, right = array.length - 1, compare = ascending$3) {
+function quickselect(array, k, left = 0, right = Infinity, compare) {
+  k = Math.floor(k);
+  left = Math.floor(Math.max(0, left));
+  right = Math.floor(Math.min(array.length - 1, right));
+
+  if (!(left <= k && k <= right)) return array;
+
+  compare = compare === undefined ? ascendingDefined : compareDefined(compare);
+
   while (right > left) {
     if (right - left > 600) {
       const n = right - left + 1;
@@ -703,6 +916,7 @@ function quickselect(array, k, left = 0, right = array.length - 1, compare = asc
     if (j <= k) left = j + 1;
     if (k <= j) right = j - 1;
   }
+
   return array;
 }
 
@@ -712,10 +926,38 @@ function swap$1(array, i, j) {
   array[j] = t;
 }
 
+function greatest(values, compare = ascending$3) {
+  let max;
+  let defined = false;
+  if (compare.length === 1) {
+    let maxValue;
+    for (const element of values) {
+      const value = compare(element);
+      if (defined
+          ? ascending$3(value, maxValue) > 0
+          : ascending$3(value, value) === 0) {
+        max = element;
+        maxValue = value;
+        defined = true;
+      }
+    }
+  } else {
+    for (const value of values) {
+      if (defined
+          ? compare(value, max) > 0
+          : compare(value, value) === 0) {
+        max = value;
+        defined = true;
+      }
+    }
+  }
+  return max;
+}
+
 function quantile$1(values, p, valueof) {
   values = Float64Array.from(numbers(values, valueof));
-  if (!(n = values.length)) return;
-  if ((p = +p) <= 0 || n < 2) return min$2(values);
+  if (!(n = values.length) || isNaN(p = +p)) return;
+  if (p <= 0 || n < 2) return min$2(values);
   if (p >= 1) return max$3(values);
   var n,
       i = (n - 1) * p,
@@ -726,8 +968,8 @@ function quantile$1(values, p, valueof) {
 }
 
 function quantileSorted(values, p, valueof = number$3) {
-  if (!(n = values.length)) return;
-  if ((p = +p) <= 0 || n < 2) return +valueof(values[0], 0, values);
+  if (!(n = values.length) || isNaN(p = +p)) return;
+  if (p <= 0 || n < 2) return +valueof(values[0], 0, values);
   if (p >= 1) return +valueof(values[n - 1], n - 1, values);
   var n,
       i = (n - 1) * p,
@@ -737,35 +979,28 @@ function quantileSorted(values, p, valueof = number$3) {
   return value0 + (value1 - value0) * (i - i0);
 }
 
-function freedmanDiaconis(values, min, max) {
-  return Math.ceil((max - min) / (2 * (quantile$1(values, 0.75) - quantile$1(values, 0.25)) * Math.pow(count$1(values), -1 / 3)));
+function quantileIndex(values, p, valueof = number$3) {
+  if (isNaN(p = +p)) return;
+  numbers = Float64Array.from(values, (_, i) => number$3(valueof(values[i], i, values)));
+  if (p <= 0) return minIndex(numbers);
+  if (p >= 1) return maxIndex(numbers);
+  var numbers,
+      index = Uint32Array.from(values, (_, i) => i),
+      j = numbers.length - 1,
+      i = Math.floor(j * p);
+  quickselect(index, i, 0, j, (i, j) => ascendingDefined(numbers[i], numbers[j]));
+  i = greatest(index.subarray(0, i + 1), (i) => numbers[i]);
+  return i >= 0 ? i : -1;
 }
 
-function scott(values, min, max) {
-  return Math.ceil((max - min) / (3.5 * deviation(values) * Math.pow(count$1(values), -1 / 3)));
+function thresholdFreedmanDiaconis(values, min, max) {
+  const c = count$1(values), d = quantile$1(values, 0.75) - quantile$1(values, 0.25);
+  return c && d ? Math.ceil((max - min) / (2 * d * Math.pow(c, -1 / 3))) : 1;
 }
 
-function maxIndex(values, valueof) {
-  let max;
-  let maxIndex = -1;
-  let index = -1;
-  if (valueof === undefined) {
-    for (const value of values) {
-      ++index;
-      if (value != null
-          && (max < value || (max === undefined && value >= value))) {
-        max = value, maxIndex = index;
-      }
-    }
-  } else {
-    for (let value of values) {
-      if ((value = valueof(value, ++index, values)) != null
-          && (max < value || (max === undefined && value >= value))) {
-        max = value, maxIndex = index;
-      }
-    }
-  }
-  return maxIndex;
+function thresholdScott(values, min, max) {
+  const c = count$1(values), d = deviation(values);
+  return c && d ? Math.ceil((max - min) * Math.cbrt(c) / (3.49 * d)) : 1;
 }
 
 function mean(values, valueof) {
@@ -792,6 +1027,10 @@ function median(values, valueof) {
   return quantile$1(values, 0.5, valueof);
 }
 
+function medianIndex(values, valueof) {
+  return quantileIndex(values, 0.5, valueof);
+}
+
 function* flatten(arrays) {
   for (const array of arrays) {
     yield* array;
@@ -800,29 +1039,6 @@ function* flatten(arrays) {
 
 function merge(arrays) {
   return Array.from(flatten(arrays));
-}
-
-function minIndex(values, valueof) {
-  let min;
-  let minIndex = -1;
-  let index = -1;
-  if (valueof === undefined) {
-    for (const value of values) {
-      ++index;
-      if (value != null
-          && (min > value || (min === undefined && value >= value))) {
-        min = value, minIndex = index;
-      }
-    }
-  } else {
-    for (let value of values) {
-      if ((value = valueof(value, ++index, values)) != null
-          && (min > value || (min === undefined && value >= value))) {
-        min = value, minIndex = index;
-      }
-    }
-  }
-  return minIndex;
 }
 
 function mode(values, valueof) {
@@ -868,7 +1084,7 @@ function pair(a, b) {
   return [a, b];
 }
 
-function sequence(start, stop, step) {
+function range$2(start, stop, step) {
   start = +start, stop = +stop, step = (n = arguments.length) < 2 ? (stop = start, start = 0, 1) : n < 3 ? 1 : +step;
 
   var i = -1,
@@ -880,6 +1096,28 @@ function sequence(start, stop, step) {
   }
 
   return range;
+}
+
+function rank(values, valueof = ascending$3) {
+  if (typeof values[Symbol.iterator] !== "function") throw new TypeError("values is not iterable");
+  let V = Array.from(values);
+  const R = new Float64Array(V.length);
+  if (valueof.length !== 2) V = V.map(valueof), valueof = ascending$3;
+  const compareIndex = (i, j) => valueof(V[i], V[j]);
+  let k, r;
+  values = Uint32Array.from(V, (_, i) => i);
+  // Risky chaining due to Safari 14 https://github.com/d3/d3-array/issues/123
+  values.sort(valueof === ascending$3 ? (i, j) => ascendingDefined(V[i], V[j]) : compareDefined(compareIndex));
+  values.forEach((j, i) => {
+      const c = compareIndex(j, k === undefined ? j : k);
+      if (c >= 0) {
+        if (k === undefined || c > 0) k = j, r = i;
+        R[j] = r;
+      } else {
+        R[j] = NaN;
+      }
+    });
+  return R;
 }
 
 function least(values, compare = ascending$3) {
@@ -925,34 +1163,6 @@ function leastIndex(values, compare = ascending$3) {
     }
   }
   return min;
-}
-
-function greatest(values, compare = ascending$3) {
-  let max;
-  let defined = false;
-  if (compare.length === 1) {
-    let maxValue;
-    for (const element of values) {
-      const value = compare(element);
-      if (defined
-          ? ascending$3(value, maxValue) > 0
-          : ascending$3(value, value) === 0) {
-        max = element;
-        maxValue = value;
-        defined = true;
-      }
-    }
-  } else {
-    for (const value of values) {
-      if (defined
-          ? compare(value, max) > 0
-          : compare(value, value) === 0) {
-        max = value;
-        defined = true;
-      }
-    }
-  }
-  return max;
 }
 
 function greatestIndex(values, compare = ascending$3) {
@@ -1089,7 +1299,7 @@ function reverse$1(values) {
 }
 
 function difference(values, ...others) {
-  values = new Set(values);
+  values = new InternSet(values);
   for (const other of others) {
     for (const value of other) {
       values.delete(value);
@@ -1099,7 +1309,7 @@ function difference(values, ...others) {
 }
 
 function disjoint(values, other) {
-  const iterator = other[Symbol.iterator](), set = new Set();
+  const iterator = other[Symbol.iterator](), set = new InternSet();
   for (const v of values) {
     if (set.has(v)) return false;
     let value, done;
@@ -1112,12 +1322,8 @@ function disjoint(values, other) {
   return true;
 }
 
-function set$2(values) {
-  return values instanceof Set ? values : new Set(values);
-}
-
 function intersection(values, ...others) {
-  values = new Set(values);
+  values = new InternSet(values);
   others = others.map(set$2);
   out: for (const value of values) {
     for (const other of others) {
@@ -1130,18 +1336,28 @@ function intersection(values, ...others) {
   return values;
 }
 
+function set$2(values) {
+  return values instanceof InternSet ? values : new InternSet(values);
+}
+
 function superset(values, other) {
   const iterator = values[Symbol.iterator](), set = new Set();
   for (const o of other) {
-    if (set.has(o)) continue;
+    const io = intern(o);
+    if (set.has(io)) continue;
     let value, done;
     while (({value, done} = iterator.next())) {
       if (done) return false;
-      set.add(value);
-      if (Object.is(o, value)) break;
+      const ivalue = intern(value);
+      set.add(ivalue);
+      if (Object.is(io, ivalue)) break;
     }
   }
   return true;
+}
+
+function intern(value) {
+  return value !== null && typeof value === "object" ? value.valueOf() : value;
 }
 
 function subset(values, other) {
@@ -1149,7 +1365,7 @@ function subset(values, other) {
 }
 
 function union(...others) {
-  const set = new Set();
+  const set = new InternSet();
   for (const other of others) {
     for (const o of other) {
       set.add(o);
@@ -2690,15 +2906,15 @@ var darker = 0.7;
 var brighter = 1 / darker;
 
 var reI = "\\s*([+-]?\\d+)\\s*",
-    reN = "\\s*([+-]?\\d*\\.?\\d+(?:[eE][+-]?\\d+)?)\\s*",
-    reP = "\\s*([+-]?\\d*\\.?\\d+(?:[eE][+-]?\\d+)?)%\\s*",
+    reN = "\\s*([+-]?(?:\\d*\\.)?\\d+(?:[eE][+-]?\\d+)?)\\s*",
+    reP = "\\s*([+-]?(?:\\d*\\.)?\\d+(?:[eE][+-]?\\d+)?)%\\s*",
     reHex = /^#([0-9a-f]{3,8})$/,
-    reRgbInteger = new RegExp("^rgb\\(" + [reI, reI, reI] + "\\)$"),
-    reRgbPercent = new RegExp("^rgb\\(" + [reP, reP, reP] + "\\)$"),
-    reRgbaInteger = new RegExp("^rgba\\(" + [reI, reI, reI, reN] + "\\)$"),
-    reRgbaPercent = new RegExp("^rgba\\(" + [reP, reP, reP, reN] + "\\)$"),
-    reHslPercent = new RegExp("^hsl\\(" + [reN, reP, reP] + "\\)$"),
-    reHslaPercent = new RegExp("^hsla\\(" + [reN, reP, reP, reN] + "\\)$");
+    reRgbInteger = new RegExp(`^rgb\\(${reI},${reI},${reI}\\)$`),
+    reRgbPercent = new RegExp(`^rgb\\(${reP},${reP},${reP}\\)$`),
+    reRgbaInteger = new RegExp(`^rgba\\(${reI},${reI},${reI},${reN}\\)$`),
+    reRgbaPercent = new RegExp(`^rgba\\(${reP},${reP},${reP},${reN}\\)$`),
+    reHslPercent = new RegExp(`^hsl\\(${reN},${reP},${reP}\\)$`),
+    reHslaPercent = new RegExp(`^hsla\\(${reN},${reP},${reP},${reN}\\)$`);
 
 var named = {
   aliceblue: 0xf0f8ff,
@@ -2852,14 +3068,15 @@ var named = {
 };
 
 define(Color, color, {
-  copy: function(channels) {
+  copy(channels) {
     return Object.assign(new this.constructor, this, channels);
   },
-  displayable: function() {
+  displayable() {
     return this.rgb().displayable();
   },
   hex: color_formatHex, // Deprecated! Use color.formatHex.
   formatHex: color_formatHex,
+  formatHex8: color_formatHex8,
   formatHsl: color_formatHsl,
   formatRgb: color_formatRgb,
   toString: color_formatRgb
@@ -2867,6 +3084,10 @@ define(Color, color, {
 
 function color_formatHex() {
   return this.rgb().formatHex();
+}
+
+function color_formatHex8() {
+  return this.rgb().formatHex8();
 }
 
 function color_formatHsl() {
@@ -2924,18 +3145,21 @@ function Rgb(r, g, b, opacity) {
 }
 
 define(Rgb, rgb, extend(Color, {
-  brighter: function(k) {
+  brighter(k) {
     k = k == null ? brighter : Math.pow(brighter, k);
     return new Rgb(this.r * k, this.g * k, this.b * k, this.opacity);
   },
-  darker: function(k) {
+  darker(k) {
     k = k == null ? darker : Math.pow(darker, k);
     return new Rgb(this.r * k, this.g * k, this.b * k, this.opacity);
   },
-  rgb: function() {
+  rgb() {
     return this;
   },
-  displayable: function() {
+  clamp() {
+    return new Rgb(clampi(this.r), clampi(this.g), clampi(this.b), clampa(this.opacity));
+  },
+  displayable() {
     return (-0.5 <= this.r && this.r < 255.5)
         && (-0.5 <= this.g && this.g < 255.5)
         && (-0.5 <= this.b && this.b < 255.5)
@@ -2943,25 +3167,34 @@ define(Rgb, rgb, extend(Color, {
   },
   hex: rgb_formatHex, // Deprecated! Use color.formatHex.
   formatHex: rgb_formatHex,
+  formatHex8: rgb_formatHex8,
   formatRgb: rgb_formatRgb,
   toString: rgb_formatRgb
 }));
 
 function rgb_formatHex() {
-  return "#" + hex(this.r) + hex(this.g) + hex(this.b);
+  return `#${hex(this.r)}${hex(this.g)}${hex(this.b)}`;
+}
+
+function rgb_formatHex8() {
+  return `#${hex(this.r)}${hex(this.g)}${hex(this.b)}${hex((isNaN(this.opacity) ? 1 : this.opacity) * 255)}`;
 }
 
 function rgb_formatRgb() {
-  var a = this.opacity; a = isNaN(a) ? 1 : Math.max(0, Math.min(1, a));
-  return (a === 1 ? "rgb(" : "rgba(")
-      + Math.max(0, Math.min(255, Math.round(this.r) || 0)) + ", "
-      + Math.max(0, Math.min(255, Math.round(this.g) || 0)) + ", "
-      + Math.max(0, Math.min(255, Math.round(this.b) || 0))
-      + (a === 1 ? ")" : ", " + a + ")");
+  const a = clampa(this.opacity);
+  return `${a === 1 ? "rgb(" : "rgba("}${clampi(this.r)}, ${clampi(this.g)}, ${clampi(this.b)}${a === 1 ? ")" : `, ${a})`}`;
+}
+
+function clampa(opacity) {
+  return isNaN(opacity) ? 1 : Math.max(0, Math.min(1, opacity));
+}
+
+function clampi(value) {
+  return Math.max(0, Math.min(255, Math.round(value) || 0));
 }
 
 function hex(value) {
-  value = Math.max(0, Math.min(255, Math.round(value) || 0));
+  value = clampi(value);
   return (value < 16 ? "0" : "") + value.toString(16);
 }
 
@@ -3010,15 +3243,15 @@ function Hsl(h, s, l, opacity) {
 }
 
 define(Hsl, hsl$2, extend(Color, {
-  brighter: function(k) {
+  brighter(k) {
     k = k == null ? brighter : Math.pow(brighter, k);
     return new Hsl(this.h, this.s, this.l * k, this.opacity);
   },
-  darker: function(k) {
+  darker(k) {
     k = k == null ? darker : Math.pow(darker, k);
     return new Hsl(this.h, this.s, this.l * k, this.opacity);
   },
-  rgb: function() {
+  rgb() {
     var h = this.h % 360 + (this.h < 0) * 360,
         s = isNaN(h) || isNaN(this.s) ? 0 : this.s,
         l = this.l,
@@ -3031,20 +3264,28 @@ define(Hsl, hsl$2, extend(Color, {
       this.opacity
     );
   },
-  displayable: function() {
+  clamp() {
+    return new Hsl(clamph(this.h), clampt(this.s), clampt(this.l), clampa(this.opacity));
+  },
+  displayable() {
     return (0 <= this.s && this.s <= 1 || isNaN(this.s))
         && (0 <= this.l && this.l <= 1)
         && (0 <= this.opacity && this.opacity <= 1);
   },
-  formatHsl: function() {
-    var a = this.opacity; a = isNaN(a) ? 1 : Math.max(0, Math.min(1, a));
-    return (a === 1 ? "hsl(" : "hsla(")
-        + (this.h || 0) + ", "
-        + (this.s || 0) * 100 + "%, "
-        + (this.l || 0) * 100 + "%"
-        + (a === 1 ? ")" : ", " + a + ")");
+  formatHsl() {
+    const a = clampa(this.opacity);
+    return `${a === 1 ? "hsl(" : "hsla("}${clamph(this.h)}, ${clampt(this.s) * 100}%, ${clampt(this.l) * 100}%${a === 1 ? ")" : `, ${a})`}`;
   }
 }));
+
+function clamph(value) {
+  value = (value || 0) % 360;
+  return value < 0 ? value + 360 : value;
+}
+
+function clampt(value) {
+  return Math.max(0, Math.min(1, value || 0));
+}
 
 /* From FvD 13.37, CSS Color Module Level 3 */
 function hsl2rgb(h, m1, m2) {
@@ -3098,13 +3339,13 @@ function Lab(l, a, b, opacity) {
 }
 
 define(Lab, lab$1, extend(Color, {
-  brighter: function(k) {
+  brighter(k) {
     return new Lab(this.l + K * (k == null ? 1 : k), this.a, this.b, this.opacity);
   },
-  darker: function(k) {
+  darker(k) {
     return new Lab(this.l - K * (k == null ? 1 : k), this.a, this.b, this.opacity);
   },
-  rgb: function() {
+  rgb() {
     var y = (this.l + 16) / 116,
         x = isNaN(this.a) ? y : y + this.a / 500,
         z = isNaN(this.b) ? y : y - this.b / 200;
@@ -3166,13 +3407,13 @@ function hcl2lab(o) {
 }
 
 define(Hcl, hcl$2, extend(Color, {
-  brighter: function(k) {
+  brighter(k) {
     return new Hcl(this.h, this.c, this.l + K * (k == null ? 1 : k), this.opacity);
   },
-  darker: function(k) {
+  darker(k) {
     return new Hcl(this.h, this.c, this.l - K * (k == null ? 1 : k), this.opacity);
   },
-  rgb: function() {
+  rgb() {
     return hcl2lab(this).rgb();
   }
 }));
@@ -3212,15 +3453,15 @@ function Cubehelix(h, s, l, opacity) {
 }
 
 define(Cubehelix, cubehelix$3, extend(Color, {
-  brighter: function(k) {
+  brighter(k) {
     k = k == null ? brighter : Math.pow(brighter, k);
     return new Cubehelix(this.h, this.s, this.l * k, this.opacity);
   },
-  darker: function(k) {
+  darker(k) {
     k = k == null ? darker : Math.pow(darker, k);
     return new Cubehelix(this.h, this.s, this.l * k, this.opacity);
   },
-  rgb: function() {
+  rgb() {
     var h = isNaN(this.h) ? 0 : (this.h + 120) * radians$1,
         l = +this.l,
         a = isNaN(this.s) ? 0 : this.s * l * (1 - l),
@@ -5800,39 +6041,58 @@ const pi$2 = Math.PI,
     epsilon$4 = 1e-6,
     tauEpsilon = tau$3 - epsilon$4;
 
-function Path$1() {
-  this._x0 = this._y0 = // start of current subpath
-  this._x1 = this._y1 = null; // end of current subpath
-  this._ = "";
+function append$1(strings) {
+  this._ += strings[0];
+  for (let i = 1, n = strings.length; i < n; ++i) {
+    this._ += arguments[i] + strings[i];
+  }
 }
 
-function path() {
-  return new Path$1;
+function appendRound$1(digits) {
+  let d = Math.floor(digits);
+  if (!(d >= 0)) throw new Error(`invalid digits: ${digits}`);
+  if (d > 15) return append$1;
+  const k = 10 ** d;
+  return function(strings) {
+    this._ += strings[0];
+    for (let i = 1, n = strings.length; i < n; ++i) {
+      this._ += Math.round(arguments[i] * k) / k + strings[i];
+    }
+  };
 }
 
-Path$1.prototype = path.prototype = {
-  constructor: Path$1,
-  moveTo: function(x, y) {
-    this._ += "M" + (this._x0 = this._x1 = +x) + "," + (this._y0 = this._y1 = +y);
-  },
-  closePath: function() {
+let Path$1 = class Path {
+  constructor(digits) {
+    this._x0 = this._y0 = // start of current subpath
+    this._x1 = this._y1 = null; // end of current subpath
+    this._ = "";
+    this._append = digits == null ? append$1 : appendRound$1(digits);
+  }
+  moveTo(x, y) {
+    this._append`M${this._x0 = this._x1 = +x},${this._y0 = this._y1 = +y}`;
+  }
+  closePath() {
     if (this._x1 !== null) {
       this._x1 = this._x0, this._y1 = this._y0;
-      this._ += "Z";
+      this._append`Z`;
     }
-  },
-  lineTo: function(x, y) {
-    this._ += "L" + (this._x1 = +x) + "," + (this._y1 = +y);
-  },
-  quadraticCurveTo: function(x1, y1, x, y) {
-    this._ += "Q" + (+x1) + "," + (+y1) + "," + (this._x1 = +x) + "," + (this._y1 = +y);
-  },
-  bezierCurveTo: function(x1, y1, x2, y2, x, y) {
-    this._ += "C" + (+x1) + "," + (+y1) + "," + (+x2) + "," + (+y2) + "," + (this._x1 = +x) + "," + (this._y1 = +y);
-  },
-  arcTo: function(x1, y1, x2, y2, r) {
+  }
+  lineTo(x, y) {
+    this._append`L${this._x1 = +x},${this._y1 = +y}`;
+  }
+  quadraticCurveTo(x1, y1, x, y) {
+    this._append`Q${+x1},${+y1},${this._x1 = +x},${this._y1 = +y}`;
+  }
+  bezierCurveTo(x1, y1, x2, y2, x, y) {
+    this._append`C${+x1},${+y1},${+x2},${+y2},${this._x1 = +x},${this._y1 = +y}`;
+  }
+  arcTo(x1, y1, x2, y2, r) {
     x1 = +x1, y1 = +y1, x2 = +x2, y2 = +y2, r = +r;
-    var x0 = this._x1,
+
+    // Is the radius negative? Error.
+    if (r < 0) throw new Error(`negative radius: ${r}`);
+
+    let x0 = this._x1,
         y0 = this._y1,
         x21 = x2 - x1,
         y21 = y2 - y1,
@@ -5840,12 +6100,9 @@ Path$1.prototype = path.prototype = {
         y01 = y0 - y1,
         l01_2 = x01 * x01 + y01 * y01;
 
-    // Is the radius negative? Error.
-    if (r < 0) throw new Error("negative radius: " + r);
-
     // Is this path empty? Move to (x1,y1).
     if (this._x1 === null) {
-      this._ += "M" + (this._x1 = x1) + "," + (this._y1 = y1);
+      this._append`M${this._x1 = x1},${this._y1 = y1}`;
     }
 
     // Or, is (x1,y1) coincident with (x0,y0)? Do nothing.
@@ -5855,12 +6112,12 @@ Path$1.prototype = path.prototype = {
     // Equivalently, is (x1,y1) coincident with (x2,y2)?
     // Or, is the radius zero? Line to (x1,y1).
     else if (!(Math.abs(y01 * x21 - y21 * x01) > epsilon$4) || !r) {
-      this._ += "L" + (this._x1 = x1) + "," + (this._y1 = y1);
+      this._append`L${this._x1 = x1},${this._y1 = y1}`;
     }
 
     // Otherwise, draw an arc!
     else {
-      var x20 = x2 - x0,
+      let x20 = x2 - x0,
           y20 = y2 - y0,
           l21_2 = x21 * x21 + y21 * y21,
           l20_2 = x20 * x20 + y20 * y20,
@@ -5872,32 +6129,33 @@ Path$1.prototype = path.prototype = {
 
       // If the start tangent is not coincident with (x0,y0), line to.
       if (Math.abs(t01 - 1) > epsilon$4) {
-        this._ += "L" + (x1 + t01 * x01) + "," + (y1 + t01 * y01);
+        this._append`L${x1 + t01 * x01},${y1 + t01 * y01}`;
       }
 
-      this._ += "A" + r + "," + r + ",0,0," + (+(y01 * x20 > x01 * y20)) + "," + (this._x1 = x1 + t21 * x21) + "," + (this._y1 = y1 + t21 * y21);
+      this._append`A${r},${r},0,0,${+(y01 * x20 > x01 * y20)},${this._x1 = x1 + t21 * x21},${this._y1 = y1 + t21 * y21}`;
     }
-  },
-  arc: function(x, y, r, a0, a1, ccw) {
+  }
+  arc(x, y, r, a0, a1, ccw) {
     x = +x, y = +y, r = +r, ccw = !!ccw;
-    var dx = r * Math.cos(a0),
+
+    // Is the radius negative? Error.
+    if (r < 0) throw new Error(`negative radius: ${r}`);
+
+    let dx = r * Math.cos(a0),
         dy = r * Math.sin(a0),
         x0 = x + dx,
         y0 = y + dy,
         cw = 1 ^ ccw,
         da = ccw ? a0 - a1 : a1 - a0;
 
-    // Is the radius negative? Error.
-    if (r < 0) throw new Error("negative radius: " + r);
-
     // Is this path empty? Move to (x0,y0).
     if (this._x1 === null) {
-      this._ += "M" + x0 + "," + y0;
+      this._append`M${x0},${y0}`;
     }
 
     // Or, is (x0,y0) not coincident with the previous point? Line to (x0,y0).
     else if (Math.abs(this._x1 - x0) > epsilon$4 || Math.abs(this._y1 - y0) > epsilon$4) {
-      this._ += "L" + x0 + "," + y0;
+      this._append`L${x0},${y0}`;
     }
 
     // Is this arc empty? We’re done.
@@ -5908,21 +6166,32 @@ Path$1.prototype = path.prototype = {
 
     // Is this a complete circle? Draw two arcs to complete the circle.
     if (da > tauEpsilon) {
-      this._ += "A" + r + "," + r + ",0,1," + cw + "," + (x - dx) + "," + (y - dy) + "A" + r + "," + r + ",0,1," + cw + "," + (this._x1 = x0) + "," + (this._y1 = y0);
+      this._append`A${r},${r},0,1,${cw},${x - dx},${y - dy}A${r},${r},0,1,${cw},${this._x1 = x0},${this._y1 = y0}`;
     }
 
     // Is this arc non-empty? Draw an arc!
     else if (da > epsilon$4) {
-      this._ += "A" + r + "," + r + ",0," + (+(da >= pi$2)) + "," + cw + "," + (this._x1 = x + r * Math.cos(a1)) + "," + (this._y1 = y + r * Math.sin(a1));
+      this._append`A${r},${r},0,${+(da >= pi$2)},${cw},${this._x1 = x + r * Math.cos(a1)},${this._y1 = y + r * Math.sin(a1)}`;
     }
-  },
-  rect: function(x, y, w, h) {
-    this._ += "M" + (this._x0 = this._x1 = +x) + "," + (this._y0 = this._y1 = +y) + "h" + (+w) + "v" + (+h) + "h" + (-w) + "Z";
-  },
-  toString: function() {
+  }
+  rect(x, y, w, h) {
+    this._append`M${this._x0 = this._x1 = +x},${this._y0 = this._y1 = +y}h${w = +w}v${+h}h${-w}Z`;
+  }
+  toString() {
     return this._;
   }
 };
+
+function path() {
+  return new Path$1;
+}
+
+// Allow instanceof d3.path
+path.prototype = Path$1.prototype;
+
+function pathRound(digits = 3) {
+  return new Path$1(+digits);
+}
 
 var slice$2 = Array.prototype.slice;
 
@@ -6127,7 +6396,7 @@ var cases = [
   []
 ];
 
-function contours() {
+function Contours() {
   var dx = 1,
       dy = 1,
       threshold = thresholdSturges,
@@ -6138,8 +6407,10 @@ function contours() {
 
     // Convert number of thresholds into uniform thresholds.
     if (!Array.isArray(tz)) {
-      const e = extent$1(values), ts = tickStep(e[0], e[1], tz);
-      tz = ticks(Math.floor(e[0] / ts) * ts, Math.floor(e[1] / ts - 1) * ts, tz);
+      const e = extent$1(values, finite);
+      tz = ticks(...nice$1(e[0], e[1], tz), tz);
+      while (tz[tz.length - 1] >= e[1]) tz.pop();
+      while (tz[1] < e[0]) tz.shift();
     } else {
       tz = tz.slice().sort(ascending$1);
     }
@@ -6150,11 +6421,14 @@ function contours() {
   // Accumulate, smooth contour rings, assign holes to exterior rings.
   // Based on https://github.com/mbostock/shapefile/blob/v0.6.2/shp/polygon.js
   function contour(values, value) {
+    const v = value == null ? NaN : +value;
+    if (isNaN(v)) throw new Error(`invalid value: ${value}`);
+
     var polygons = [],
         holes = [];
 
-    isorings(values, value, function(ring) {
-      smooth(ring, values, value);
+    isorings(values, v, function(ring) {
+      smooth(ring, values, v);
       if (area$3(ring) > 0) polygons.push([ring]);
       else holes.push(ring);
     });
@@ -6184,10 +6458,10 @@ function contours() {
 
     // Special case for the first row (y = -1, t2 = t3 = 0).
     x = y = -1;
-    t1 = values[0] >= value;
+    t1 = above(values[0], value);
     cases[t1 << 1].forEach(stitch);
     while (++x < dx - 1) {
-      t0 = t1, t1 = values[x + 1] >= value;
+      t0 = t1, t1 = above(values[x + 1], value);
       cases[t0 | t1 << 1].forEach(stitch);
     }
     cases[t1 << 0].forEach(stitch);
@@ -6195,12 +6469,12 @@ function contours() {
     // General case for the intermediate rows.
     while (++y < dy - 1) {
       x = -1;
-      t1 = values[y * dx + dx] >= value;
-      t2 = values[y * dx] >= value;
+      t1 = above(values[y * dx + dx], value);
+      t2 = above(values[y * dx], value);
       cases[t1 << 1 | t2 << 2].forEach(stitch);
       while (++x < dx - 1) {
-        t0 = t1, t1 = values[y * dx + dx + x + 1] >= value;
-        t3 = t2, t2 = values[y * dx + x + 1] >= value;
+        t0 = t1, t1 = above(values[y * dx + dx + x + 1], value);
+        t3 = t2, t2 = above(values[y * dx + x + 1], value);
         cases[t0 | t1 << 1 | t2 << 2 | t3 << 3].forEach(stitch);
       }
       cases[t1 | t2 << 3].forEach(stitch);
@@ -6211,7 +6485,7 @@ function contours() {
     t2 = values[y * dx] >= value;
     cases[t2 << 2].forEach(stitch);
     while (++x < dx - 1) {
-      t3 = t2, t2 = values[y * dx + x + 1] >= value;
+      t3 = t2, t2 = above(values[y * dx + x + 1], value);
       cases[t2 << 2 | t3 << 3].forEach(stitch);
     }
     cases[t2 << 3].forEach(stitch);
@@ -6268,15 +6542,12 @@ function contours() {
           y = point[1],
           xt = x | 0,
           yt = y | 0,
-          v0,
-          v1 = values[yt * dx + xt];
+          v1 = valid(values[yt * dx + xt]);
       if (x > 0 && x < dx && xt === x) {
-        v0 = values[yt * dx + xt - 1];
-        point[0] = x + (value - v0) / (v1 - v0) - 0.5;
+        point[0] = smooth1(x, valid(values[yt * dx + xt - 1]), v1, value);
       }
       if (y > 0 && y < dy && yt === y) {
-        v0 = values[(yt - 1) * dx + xt];
-        point[1] = y + (value - v0) / (v1 - v0) - 0.5;
+        point[1] = smooth1(y, valid(values[(yt - 1) * dx + xt]), v1, value);
       }
     });
   }
@@ -6301,48 +6572,27 @@ function contours() {
   return contours;
 }
 
-// TODO Optimize edge cases.
-// TODO Optimize index calculation.
-// TODO Optimize arguments.
-function blurX(source, target, r) {
-  var n = source.width,
-      m = source.height,
-      w = (r << 1) + 1;
-  for (var j = 0; j < m; ++j) {
-    for (var i = 0, sr = 0; i < n + r; ++i) {
-      if (i < n) {
-        sr += source.data[i + j * n];
-      }
-      if (i >= r) {
-        if (i >= w) {
-          sr -= source.data[i - w + j * n];
-        }
-        target.data[i - r + j * n] = sr / Math.min(i + 1, n - 1 + w - i, w);
-      }
-    }
-  }
+// When computing the extent, ignore infinite values (as well as invalid ones).
+function finite(x) {
+  return isFinite(x) ? x : NaN;
 }
 
-// TODO Optimize edge cases.
-// TODO Optimize index calculation.
-// TODO Optimize arguments.
-function blurY(source, target, r) {
-  var n = source.width,
-      m = source.height,
-      w = (r << 1) + 1;
-  for (var i = 0; i < n; ++i) {
-    for (var j = 0, sr = 0; j < m + r; ++j) {
-      if (j < m) {
-        sr += source.data[i + j * n];
-      }
-      if (j >= r) {
-        if (j >= w) {
-          sr -= source.data[i + (j - w) * n];
-        }
-        target.data[i + (j - r) * n] = sr / Math.min(j + 1, m - 1 + w - j, w);
-      }
-    }
-  }
+// Is the (possibly invalid) x greater than or equal to the (known valid) value?
+// Treat any invalid value as below negative infinity.
+function above(x, value) {
+  return x == null ? false : +x >= value;
+}
+
+// During smoothing, treat any invalid value as negative infinity.
+function valid(v) {
+  return v == null || isNaN(v = +v) ? -Infinity : v;
+}
+
+function smooth1(x, v0, v1, value) {
+  const a = value - v0;
+  const b = v1 - v0;
+  const d = isFinite(a) || isFinite(b) ? a / b : Math.sign(a) / Math.sign(b);
+  return isNaN(d) ? x : x + d - 0.5;
 }
 
 function defaultX$1(d) {
@@ -6370,54 +6620,63 @@ function density() {
       m = (dy + o * 2) >> k, // grid height
       threshold = constant$5(20);
 
-  function density(data) {
-    var values0 = new Float32Array(n * m),
-        values1 = new Float32Array(n * m),
-        pow2k = Math.pow(2, -k);
+  function grid(data) {
+    var values = new Float32Array(n * m),
+        pow2k = Math.pow(2, -k),
+        i = -1;
 
-    data.forEach(function(d, i, data) {
-      var xi = (x(d, i, data) + o) * pow2k,
+    for (const d of data) {
+      var xi = (x(d, ++i, data) + o) * pow2k,
           yi = (y(d, i, data) + o) * pow2k,
           wi = +weight(d, i, data);
-      if (xi >= 0 && xi < n && yi >= 0 && yi < m) {
+      if (wi && xi >= 0 && xi < n && yi >= 0 && yi < m) {
         var x0 = Math.floor(xi),
             y0 = Math.floor(yi),
             xt = xi - x0 - 0.5,
             yt = yi - y0 - 0.5;
-        values0[x0 + y0 * n] += (1 - xt) * (1 - yt) * wi;
-        values0[x0 + 1 + y0 * n] += xt * (1 - yt) * wi;
-        values0[x0 + 1 + (y0 + 1) * n] += xt * yt * wi;
-        values0[x0 + (y0 + 1) * n] += (1 - xt) * yt * wi;
+        values[x0 + y0 * n] += (1 - xt) * (1 - yt) * wi;
+        values[x0 + 1 + y0 * n] += xt * (1 - yt) * wi;
+        values[x0 + 1 + (y0 + 1) * n] += xt * yt * wi;
+        values[x0 + (y0 + 1) * n] += (1 - xt) * yt * wi;
       }
-    });
+    }
 
-    // TODO Optimize.
-    blurX({width: n, height: m, data: values0}, {width: n, height: m, data: values1}, r >> k);
-    blurY({width: n, height: m, data: values1}, {width: n, height: m, data: values0}, r >> k);
-    blurX({width: n, height: m, data: values0}, {width: n, height: m, data: values1}, r >> k);
-    blurY({width: n, height: m, data: values1}, {width: n, height: m, data: values0}, r >> k);
-    blurX({width: n, height: m, data: values0}, {width: n, height: m, data: values1}, r >> k);
-    blurY({width: n, height: m, data: values1}, {width: n, height: m, data: values0}, r >> k);
+    blur2({data: values, width: n, height: m}, r * pow2k);
+    return values;
+  }
 
-    var tz = threshold(values0);
+  function density(data) {
+    var values = grid(data),
+        tz = threshold(values),
+        pow4k = Math.pow(2, 2 * k);
 
     // Convert number of thresholds into uniform thresholds.
     if (!Array.isArray(tz)) {
-      var stop = max$3(values0);
-      tz = tickStep(0, stop, tz);
-      tz = sequence(0, Math.floor(stop / tz) * tz, tz);
-      tz.shift();
+      tz = ticks(Number.MIN_VALUE, max$3(values) / pow4k, tz);
     }
 
-    return contours()
-        .thresholds(tz)
+    return Contours()
         .size([n, m])
-      (values0)
-        .map(transform);
+        .thresholds(tz.map(d => d * pow4k))
+      (values)
+        .map((c, i) => (c.value = +tz[i], transform(c)));
   }
 
+  density.contours = function(data) {
+    var values = grid(data),
+        contours = Contours().size([n, m]),
+        pow4k = Math.pow(2, 2 * k),
+        contour = value => {
+          value = +value;
+          var c = transform(contours.contour(values, value * pow4k));
+          c.value = value; // preserve exact threshold value
+          return c;
+        };
+    Object.defineProperty(contour, "max", {get: () => max$3(values) / pow4k});
+    return contour;
+  };
+
   function transform(geometry) {
-    geometry.value *= Math.pow(2, -2 * k); // Density in points per square pixel.
     geometry.coordinates.forEach(transformPolygon);
     return geometry;
   }
@@ -6475,7 +6734,7 @@ function density() {
   density.bandwidth = function(_) {
     if (!arguments.length) return Math.sqrt(r * (r + 1));
     if (!((_ = +_) >= 0)) throw new Error("invalid bandwidth");
-    return r = Math.round((Math.sqrt(4 * _ * _ + 1) - 1) / 2), resize();
+    return r = (Math.sqrt(4 * _ * _ + 1) - 1) / 2, resize();
   };
 
   return density;
@@ -6740,8 +6999,6 @@ function orient2d(ax, ay, bx, by, cx, cy) {
     const detleft = (ay - cy) * (bx - cx);
     const detright = (ax - cx) * (by - cy);
     const det = detleft - detright;
-
-    if (detleft === 0 || detright === 0 || (detleft > 0) !== (detright > 0)) return det;
 
     const detsum = Math.abs(detleft + detright);
     if (Math.abs(det) >= ccwerrboundA * detsum) return det;
@@ -7302,6 +7559,7 @@ class Voronoi {
   }
   _init() {
     const {delaunay: {points, hull, triangles}, vectors} = this;
+    let bx, by; // lazily computed barycenter of the hull
 
     // Compute circumcenters.
     const circumcenters = this.circumcenters = this._circumcenters.subarray(0, triangles.length / 3 * 2);
@@ -7323,17 +7581,15 @@ class Voronoi {
       const ab = (dx * ey - dy * ex) * 2;
 
       if (Math.abs(ab) < 1e-9) {
-        // degenerate case (collinear diagram)
-        // almost equal points (degenerate triangle)
-        // the circumcenter is at the infinity, in a
-        // direction that is:
-        // 1. orthogonal to the halfedge.
-        let a = 1e9;
-        // 2. points away from the center; since the list of triangles starts
-        // in the center, the first point of the first triangle
-        // will be our reference
-        const r = triangles[0] * 2;
-        a *= Math.sign((points[r] - x1) * ey - (points[r + 1] - y1) * ex);
+        // For a degenerate triangle, the circumcenter is at the infinity, in a
+        // direction orthogonal to the halfedge and away from the “center” of
+        // the diagram <bx, by>, defined as the hull’s barycenter.
+        if (bx === undefined) {
+          bx = by = 0;
+          for (const i of hull) bx += points[i * 2], by += points[i * 2 + 1];
+          bx /= hull.length, by /= hull.length;
+        }
+        const a = 1e9 * Math.sign((bx - x1) * ey - (by - y1) * ex);
         x = (x1 + x3) / 2 - a * ey;
         y = (y1 + y3) / 2 + a * ex;
       } else {
@@ -7442,11 +7698,10 @@ class Voronoi {
       // find the common edge
       if (cj) loop: for (let ai = 0, li = ci.length; ai < li; ai += 2) {
         for (let aj = 0, lj = cj.length; aj < lj; aj += 2) {
-          if (ci[ai] == cj[aj]
-          && ci[ai + 1] == cj[aj + 1]
-          && ci[(ai + 2) % li] == cj[(aj + lj - 2) % lj]
-          && ci[(ai + 3) % li] == cj[(aj + lj - 1) % lj]
-          ) {
+          if (ci[ai] === cj[aj]
+              && ci[ai + 1] === cj[aj + 1]
+              && ci[(ai + 2) % li] === cj[(aj + lj - 2) % lj]
+              && ci[(ai + 3) % li] === cj[(aj + lj - 1) % lj]) {
             yield j;
             break loop;
           }
@@ -7478,9 +7733,9 @@ class Voronoi {
     if (points === null) return null;
     const {vectors: V} = this;
     const v = i * 4;
-    return V[v] || V[v + 1]
+    return this._simplify(V[v] || V[v + 1]
         ? this._clipInfinite(i, points, V[v], V[v + 1], V[v + 2], V[v + 3])
-        : this._clipFinite(i, points);
+        : this._clipFinite(i, points));
   }
   _clipFinite(i, points) {
     const n = points.length;
@@ -7523,8 +7778,11 @@ class Voronoi {
     return P;
   }
   _clipSegment(x0, y0, x1, y1, c0, c1) {
+    // for more robustness, always consider the segment in the same order
+    const flip = c0 < c1;
+    if (flip) [x0, y0, x1, y1, c0, c1] = [x1, y1, x0, y0, c1, c0];
     while (true) {
-      if (c0 === 0 && c1 === 0) return [x0, y0, x1, y1];
+      if (c0 === 0 && c1 === 0) return flip ? [x1, y1, x0, y0] : [x0, y0, x1, y1];
       if (c0 & c1) return null;
       let x, y, c = c0 || c1;
       if (c & 0b1000) x = x0 + (x1 - x0) * (this.ymax - y0) / (y1 - y0), y = this.ymax;
@@ -7568,14 +7826,6 @@ class Voronoi {
         P.splice(j, 0, x, y), j += 2;
       }
     }
-    if (P.length > 4) {
-      for (let i = 0; i < P.length; i+= 2) {
-        const j = (i + 2) % P.length, k = (i + 4) % P.length;
-        if (P[i] === P[j] && P[j] === P[k]
-        || P[i + 1] === P[j + 1] && P[j + 1] === P[k + 1])
-          P.splice(j, 2), i -= 2;
-      }
-    }
     return j;
   }
   _project(x0, y0, vx, vy) {
@@ -7607,6 +7857,18 @@ class Voronoi {
         : x > this.xmax ? 0b0010 : 0b0000)
         | (y < this.ymin ? 0b0100
         : y > this.ymax ? 0b1000 : 0b0000);
+  }
+  _simplify(P) {
+    if (P && P.length > 4) {
+      for (let i = 0; i < P.length; i+= 2) {
+        const j = (i + 2) % P.length, k = (i + 4) % P.length;
+        if (P[i] === P[j] && P[j] === P[k] || P[i + 1] === P[j + 1] && P[j + 1] === P[k + 1]) {
+          P.splice(j, 2), i -= 2;
+        }
+      }
+      if (!P.length) P = null;
+    }
+    return P;
   }
 }
 
@@ -8809,13 +9071,13 @@ function link$2(links) {
 }
 
 // https://en.wikipedia.org/wiki/Linear_congruential_generator#Parameters_in_common_use
-const a$1 = 1664525;
-const c$3 = 1013904223;
-const m = 4294967296; // 2^32
+const a$2 = 1664525;
+const c$4 = 1013904223;
+const m$1 = 4294967296; // 2^32
 
-function lcg$1() {
+function lcg$2() {
   let s = 1;
-  return () => (s = (a$1 * s + c$3) % m) / m;
+  return () => (s = (a$2 * s + c$4) % m$1) / m$1;
 }
 
 function x$2(d) {
@@ -8839,7 +9101,7 @@ function simulation(nodes) {
       forces = new Map(),
       stepper = timer(step),
       event = dispatch("tick", "end"),
-      random = lcg$1();
+      random = lcg$2();
 
   if (nodes == null) nodes = [];
 
@@ -9377,7 +9639,7 @@ function identity$6(x) {
 }
 
 var map = Array.prototype.map,
-    prefixes = ["y","z","a","f","p","n","\xB5","m","","k","M","G","T","P","E","Z","Y"];
+    prefixes = ["y","z","a","f","p","n","µ","m","","k","M","G","T","P","E","Z","Y"];
 
 function formatLocale$1(locale) {
   var group = locale.grouping === undefined || locale.thousands === undefined ? identity$6 : formatGroup(map.call(locale.grouping, Number), locale.thousands + ""),
@@ -9386,7 +9648,7 @@ function formatLocale$1(locale) {
       decimal = locale.decimal === undefined ? "." : locale.decimal + "",
       numerals = locale.numerals === undefined ? identity$6 : formatNumerals(map.call(locale.numerals, String)),
       percent = locale.percent === undefined ? "%" : locale.percent + "",
-      minus = locale.minus === undefined ? "\u2212" : locale.minus + "",
+      minus = locale.minus === undefined ? "−" : locale.minus + "",
       nan = locale.nan === undefined ? "NaN" : locale.nan + "";
 
   function newFormat(specifier) {
@@ -9766,22 +10028,22 @@ var lambda0$1, phi0, lambda1, phi1, // bounds
     ranges,
     range;
 
-var boundsStream$1 = {
+var boundsStream$2 = {
   point: boundsPoint$1,
   lineStart: boundsLineStart,
   lineEnd: boundsLineEnd,
   polygonStart: function() {
-    boundsStream$1.point = boundsRingPoint;
-    boundsStream$1.lineStart = boundsRingStart;
-    boundsStream$1.lineEnd = boundsRingEnd;
+    boundsStream$2.point = boundsRingPoint;
+    boundsStream$2.lineStart = boundsRingStart;
+    boundsStream$2.lineEnd = boundsRingEnd;
     deltaSum = new Adder();
     areaStream$1.polygonStart();
   },
   polygonEnd: function() {
     areaStream$1.polygonEnd();
-    boundsStream$1.point = boundsPoint$1;
-    boundsStream$1.lineStart = boundsLineStart;
-    boundsStream$1.lineEnd = boundsLineEnd;
+    boundsStream$2.point = boundsPoint$1;
+    boundsStream$2.lineStart = boundsLineStart;
+    boundsStream$2.lineEnd = boundsLineEnd;
     if (areaRingSum$1 < 0) lambda0$1 = -(lambda1 = 180), phi0 = -(phi1 = 90);
     else if (deltaSum > epsilon$1) phi1 = 90;
     else if (deltaSum < -epsilon$1) phi0 = -90;
@@ -9848,12 +10110,12 @@ function linePoint(lambda, phi) {
 }
 
 function boundsLineStart() {
-  boundsStream$1.point = linePoint;
+  boundsStream$2.point = linePoint;
 }
 
 function boundsLineEnd() {
   range[0] = lambda0$1, range[1] = lambda1;
-  boundsStream$1.point = boundsPoint$1;
+  boundsStream$2.point = boundsPoint$1;
   p0 = null;
 }
 
@@ -9900,7 +10162,7 @@ function bounds(feature) {
 
   phi1 = lambda1 = -(lambda0$1 = phi0 = Infinity);
   ranges = [];
-  geoStream(feature, boundsStream$1);
+  geoStream(feature, boundsStream$2);
 
   // First, sort ranges by their minimum longitudes.
   if (n = ranges.length) {
@@ -10091,7 +10353,8 @@ function compose(a, b) {
 }
 
 function rotationIdentity(lambda, phi) {
-  return [abs$1(lambda) > pi$1 ? lambda + Math.round(-lambda / tau$1) * tau$1 : lambda, phi];
+  if (abs$1(lambda) > pi$1) lambda -= Math.round(lambda / tau$1) * tau$1;
+  return [lambda, phi];
 }
 
 rotationIdentity.invert = rotationIdentity;
@@ -10105,7 +10368,9 @@ function rotateRadians(deltaLambda, deltaPhi, deltaGamma) {
 
 function forwardRotationLambda(deltaLambda) {
   return function(lambda, phi) {
-    return lambda += deltaLambda, [lambda > pi$1 ? lambda - tau$1 : lambda < -pi$1 ? lambda + tau$1 : lambda, phi];
+    lambda += deltaLambda;
+    if (abs$1(lambda) > pi$1) lambda -= Math.round(lambda / tau$1) * tau$1;
+    return [lambda, phi];
   };
 }
 
@@ -10192,7 +10457,7 @@ function circleRadius(cosRadius, point) {
   return ((-point[2] < 0 ? -radius : radius) + tau$1 - epsilon$1) % tau$1;
 }
 
-function circle$2() {
+function circle$1() {
   var center = constant$3([0, 0]),
       radius = constant$3(90),
       precision = constant$3(6),
@@ -11214,12 +11479,12 @@ function contains$1(object, point) {
 }
 
 function graticuleX(y0, y1, dy) {
-  var y = sequence(y0, y1 - epsilon$1, dy).concat(y1);
+  var y = range$2(y0, y1 - epsilon$1, dy).concat(y1);
   return function(x) { return y.map(function(y) { return [x, y]; }); };
 }
 
 function graticuleY(x0, x1, dx) {
-  var x = sequence(x0, x1 - epsilon$1, dx).concat(x1);
+  var x = range$2(x0, x1 - epsilon$1, dx).concat(x1);
   return function(y) { return x.map(function(x) { return [x, y]; }); };
 }
 
@@ -11235,10 +11500,10 @@ function graticule() {
   }
 
   function lines() {
-    return sequence(ceil(X0 / DX) * DX, X1, DX).map(X)
-        .concat(sequence(ceil(Y0 / DY) * DY, Y1, DY).map(Y))
-        .concat(sequence(ceil(x0 / dx) * dx, x1, dx).filter(function(x) { return abs$1(x % DX) > epsilon$1; }).map(x))
-        .concat(sequence(ceil(y0 / dy) * dy, y1, dy).filter(function(y) { return abs$1(y % DY) > epsilon$1; }).map(y));
+    return range$2(ceil(X0 / DX) * DX, X1, DX).map(X)
+        .concat(range$2(ceil(Y0 / DY) * DY, Y1, DY).map(Y))
+        .concat(range$2(ceil(x0 / dx) * dx, x1, dx).filter(function(x) { return abs$1(x % DX) > epsilon$1; }).map(x))
+        .concat(range$2(ceil(y0 / dy) * dy, y1, dy).filter(function(y) { return abs$1(y % DY) > epsilon$1; }).map(y));
   }
 
   graticule.lines = function() {
@@ -11398,6 +11663,8 @@ function areaRingEnd() {
   areaPoint(x00$2, y00$2);
 }
 
+var pathArea = areaStream;
+
 var x0$2 = Infinity,
     y0$2 = x0$2,
     x1 = -x0$2,
@@ -11422,6 +11689,8 @@ function boundsPoint(x, y) {
   if (y < y0$2) y0$2 = y;
   if (y > y1) y1 = y;
 }
+
+var boundsStream$1 = boundsStream;
 
 // TODO Enforce positive area for exterior, negative area for interior?
 
@@ -11520,6 +11789,8 @@ function centroidPointRing(x, y) {
   centroidPoint(x0$1 = x, y0$1 = y);
 }
 
+var pathCentroid = centroidStream;
+
 function PathContext(context) {
   this._context = context;
 }
@@ -11603,68 +11874,98 @@ function lengthPoint(x, y) {
   x0 = x, y0 = y;
 }
 
-function PathString() {
-  this._string = [];
-}
+var pathMeasure = lengthStream;
 
-PathString.prototype = {
-  _radius: 4.5,
-  _circle: circle$1(4.5),
-  pointRadius: function(_) {
-    if ((_ = +_) !== this._radius) this._radius = _, this._circle = null;
+// Simple caching for constant-radius points.
+let cacheDigits, cacheAppend, cacheRadius, cacheCircle;
+
+class PathString {
+  constructor(digits) {
+    this._append = digits == null ? append : appendRound(digits);
+    this._radius = 4.5;
+    this._ = "";
+  }
+  pointRadius(_) {
+    this._radius = +_;
     return this;
-  },
-  polygonStart: function() {
+  }
+  polygonStart() {
     this._line = 0;
-  },
-  polygonEnd: function() {
+  }
+  polygonEnd() {
     this._line = NaN;
-  },
-  lineStart: function() {
+  }
+  lineStart() {
     this._point = 0;
-  },
-  lineEnd: function() {
-    if (this._line === 0) this._string.push("Z");
+  }
+  lineEnd() {
+    if (this._line === 0) this._ += "Z";
     this._point = NaN;
-  },
-  point: function(x, y) {
+  }
+  point(x, y) {
     switch (this._point) {
       case 0: {
-        this._string.push("M", x, ",", y);
+        this._append`M${x},${y}`;
         this._point = 1;
         break;
       }
       case 1: {
-        this._string.push("L", x, ",", y);
+        this._append`L${x},${y}`;
         break;
       }
       default: {
-        if (this._circle == null) this._circle = circle$1(this._radius);
-        this._string.push("M", x, ",", y, this._circle);
+        this._append`M${x},${y}`;
+        if (this._radius !== cacheRadius || this._append !== cacheAppend) {
+          const r = this._radius;
+          const s = this._;
+          this._ = ""; // stash the old string so we can cache the circle path fragment
+          this._append`m0,${r}a${r},${r} 0 1,1 0,${-2 * r}a${r},${r} 0 1,1 0,${2 * r}z`;
+          cacheRadius = r;
+          cacheAppend = this._append;
+          cacheCircle = this._;
+          this._ = s;
+        }
+        this._ += cacheCircle;
         break;
       }
     }
-  },
-  result: function() {
-    if (this._string.length) {
-      var result = this._string.join("");
-      this._string = [];
-      return result;
-    } else {
-      return null;
-    }
   }
-};
+  result() {
+    const result = this._;
+    this._ = "";
+    return result.length ? result : null;
+  }
+}
 
-function circle$1(radius) {
-  return "m0," + radius
-      + "a" + radius + "," + radius + " 0 1,1 0," + -2 * radius
-      + "a" + radius + "," + radius + " 0 1,1 0," + 2 * radius
-      + "z";
+function append(strings) {
+  let i = 1;
+  this._ += strings[0];
+  for (const j = strings.length; i < j; ++i) {
+    this._ += arguments[i] + strings[i];
+  }
+}
+
+function appendRound(digits) {
+  const d = Math.floor(digits);
+  if (!(d >= 0)) throw new RangeError(`invalid digits: ${digits}`);
+  if (d > 15) return append;
+  if (d !== cacheDigits) {
+    const k = 10 ** d;
+    cacheDigits = d;
+    cacheAppend = function append(strings) {
+      let i = 1;
+      this._ += strings[0];
+      for (const j = strings.length; i < j; ++i) {
+        this._ += Math.round(arguments[i] * k) / k + strings[i];
+      }
+    };
+  }
+  return cacheAppend;
 }
 
 function index$2(projection, context) {
-  var pointRadius = 4.5,
+  let digits = 3,
+      pointRadius = 4.5,
       projectionStream,
       contextStream;
 
@@ -11677,32 +11978,34 @@ function index$2(projection, context) {
   }
 
   path.area = function(object) {
-    geoStream(object, projectionStream(areaStream));
-    return areaStream.result();
+    geoStream(object, projectionStream(pathArea));
+    return pathArea.result();
   };
 
   path.measure = function(object) {
-    geoStream(object, projectionStream(lengthStream));
-    return lengthStream.result();
+    geoStream(object, projectionStream(pathMeasure));
+    return pathMeasure.result();
   };
 
   path.bounds = function(object) {
-    geoStream(object, projectionStream(boundsStream));
-    return boundsStream.result();
+    geoStream(object, projectionStream(boundsStream$1));
+    return boundsStream$1.result();
   };
 
   path.centroid = function(object) {
-    geoStream(object, projectionStream(centroidStream));
-    return centroidStream.result();
+    geoStream(object, projectionStream(pathCentroid));
+    return pathCentroid.result();
   };
 
   path.projection = function(_) {
-    return arguments.length ? (projectionStream = _ == null ? (projection = null, identity$5) : (projection = _).stream, path) : projection;
+    if (!arguments.length) return projection;
+    projectionStream = _ == null ? (projection = null, identity$5) : (projection = _).stream;
+    return path;
   };
 
   path.context = function(_) {
     if (!arguments.length) return context;
-    contextStream = _ == null ? (context = null, new PathString) : new PathContext(context = _);
+    contextStream = _ == null ? (context = null, new PathString(digits)) : new PathContext(context = _);
     if (typeof pointRadius !== "function") contextStream.pointRadius(pointRadius);
     return path;
   };
@@ -11713,7 +12016,19 @@ function index$2(projection, context) {
     return path;
   };
 
-  return path.projection(projection).context(context);
+  path.digits = function(_) {
+    if (!arguments.length) return digits;
+    if (_ == null) digits = null;
+    else {
+      const d = Math.floor(_);
+      if (!(d >= 0)) throw new RangeError(`invalid digits: ${_}`);
+      digits = d;
+    }
+    if (context === null) contextStream = new PathString(digits);
+    return path;
+  };
+
+  return path.projection(projection).digits(digits).context(context);
 }
 
 function transform$1(methods) {
@@ -11747,8 +12062,8 @@ function fit(projection, fitBounds, object) {
   var clip = projection.clipExtent && projection.clipExtent();
   projection.scale(150).translate([0, 0]);
   if (clip != null) projection.clipExtent(null);
-  geoStream(object, projection.stream(boundsStream));
-  fitBounds(boundsStream.result());
+  geoStream(object, projection.stream(boundsStream$1));
+  fitBounds(boundsStream$1.result());
   if (clip != null) projection.clipExtent(clip);
   return projection;
 }
@@ -12928,19 +13243,48 @@ Node$1.prototype = hierarchy.prototype = {
   [Symbol.iterator]: node_iterator
 };
 
+function optional(f) {
+  return f == null ? null : required(f);
+}
+
+function required(f) {
+  if (typeof f !== "function") throw new Error;
+  return f;
+}
+
+function constantZero() {
+  return 0;
+}
+
+function constant$2(x) {
+  return function() {
+    return x;
+  };
+}
+
+// https://en.wikipedia.org/wiki/Linear_congruential_generator#Parameters_in_common_use
+const a$1 = 1664525;
+const c$3 = 1013904223;
+const m = 4294967296; // 2^32
+
+function lcg$1() {
+  let s = 1;
+  return () => (s = (a$1 * s + c$3) % m) / m;
+}
+
 function array$1(x) {
   return typeof x === "object" && "length" in x
     ? x // Array, TypedArray, NodeList, array-like
     : Array.from(x); // Map, Set, iterable, string, or anything else
 }
 
-function shuffle(array) {
-  var m = array.length,
+function shuffle(array, random) {
+  let m = array.length,
       t,
       i;
 
   while (m) {
-    i = Math.random() * m-- | 0;
+    i = random() * m-- | 0;
     t = array[m];
     array[m] = array[i];
     array[i] = t;
@@ -12950,7 +13294,11 @@ function shuffle(array) {
 }
 
 function enclose(circles) {
-  var i = 0, n = (circles = shuffle(Array.from(circles))).length, B = [], p, e;
+  return packEncloseRandom(circles, lcg$1());
+}
+
+function packEncloseRandom(circles, random) {
+  var i = 0, n = (circles = shuffle(Array.from(circles), random)).length, B = [], p, e;
 
   while (i < n) {
     p = circles[i];
@@ -13058,7 +13406,7 @@ function encloseBasis3(a, b, c) {
       A = xb * xb + yb * yb - 1,
       B = 2 * (r1 + xa * xb + ya * yb),
       C = xa * xa + ya * ya - r1 * r1,
-      r = -(A ? (B + Math.sqrt(B * B - 4 * A * C)) / (2 * A) : C / B);
+      r = -(Math.abs(A) > 1e-6 ? (B + Math.sqrt(B * B - 4 * A * C)) / (2 * A) : C / B);
   return {
     x: x1 + xa + xb * r,
     y: y1 + ya + yb * r,
@@ -13110,7 +13458,7 @@ function Node(circle) {
   this.previous = null;
 }
 
-function packEnclose(circles) {
+function packSiblingsRandom(circles, random) {
   if (!(n = (circles = array$1(circles)).length)) return 0;
 
   var a, b, c, n, aa, ca, i, j, k, sj, sk;
@@ -13170,7 +13518,7 @@ function packEnclose(circles) {
   }
 
   // Compute the enclosing circle of the front chain.
-  a = [b._], c = b; while ((c = c.next) !== b) a.push(c._); c = enclose(a);
+  a = [b._], c = b; while ((c = c.next) !== b) a.push(c._); c = packEncloseRandom(a, random);
 
   // Translate the circles to put the enclosing circle around the origin.
   for (i = 0; i < n; ++i) a = circles[i], a.x -= c.x, a.y -= c.y;
@@ -13179,27 +13527,8 @@ function packEnclose(circles) {
 }
 
 function siblings(circles) {
-  packEnclose(circles);
+  packSiblingsRandom(circles, lcg$1());
   return circles;
-}
-
-function optional(f) {
-  return f == null ? null : required(f);
-}
-
-function required(f) {
-  if (typeof f !== "function") throw new Error;
-  return f;
-}
-
-function constantZero() {
-  return 0;
-}
-
-function constant$2(x) {
-  return function() {
-    return x;
-  };
 }
 
 function defaultRadius(d) {
@@ -13213,15 +13542,16 @@ function index$1() {
       padding = constantZero;
 
   function pack(root) {
+    const random = lcg$1();
     root.x = dx / 2, root.y = dy / 2;
     if (radius) {
       root.eachBefore(radiusLeaf(radius))
-          .eachAfter(packChildren(padding, 0.5))
+          .eachAfter(packChildrenRandom(padding, 0.5, random))
           .eachBefore(translateChild(1));
     } else {
       root.eachBefore(radiusLeaf(defaultRadius))
-          .eachAfter(packChildren(constantZero, 1))
-          .eachAfter(packChildren(padding, root.r / Math.min(dx, dy)))
+          .eachAfter(packChildrenRandom(constantZero, 1, random))
+          .eachAfter(packChildrenRandom(padding, root.r / Math.min(dx, dy), random))
           .eachBefore(translateChild(Math.min(dx, dy) / (2 * root.r)));
     }
     return root;
@@ -13250,7 +13580,7 @@ function radiusLeaf(radius) {
   };
 }
 
-function packChildren(padding, k) {
+function packChildrenRandom(padding, k, random) {
   return function(node) {
     if (children = node.children) {
       var children,
@@ -13260,7 +13590,7 @@ function packChildren(padding, k) {
           e;
 
       if (r) for (i = 0; i < n; ++i) children[i].r += r;
-      e = packEnclose(children);
+      e = packSiblingsRandom(children, random);
       if (r) for (i = 0; i < n; ++i) children[i].r -= r;
       node.r = e + r;
     }
@@ -13349,7 +13679,8 @@ function partition() {
 }
 
 var preroot = {depth: -1},
-    ambiguous = {};
+    ambiguous = {},
+    imputed = {};
 
 function defaultId(d) {
   return d.id;
@@ -13361,11 +13692,14 @@ function defaultParentId(d) {
 
 function stratify() {
   var id = defaultId,
-      parentId = defaultParentId;
+      parentId = defaultParentId,
+      path;
 
   function stratify(data) {
     var nodes = Array.from(data),
-        n = nodes.length,
+        currentId = id,
+        currentParentId = parentId,
+        n,
         d,
         i,
         root,
@@ -13375,13 +13709,29 @@ function stratify() {
         nodeKey,
         nodeByKey = new Map;
 
-    for (i = 0; i < n; ++i) {
+    if (path != null) {
+      const I = nodes.map((d, i) => normalize$1(path(d, i, data)));
+      const P = I.map(parentof);
+      const S = new Set(I).add("");
+      for (const i of P) {
+        if (!S.has(i)) {
+          S.add(i);
+          I.push(i);
+          P.push(parentof(i));
+          nodes.push(imputed);
+        }
+      }
+      currentId = (_, i) => I[i];
+      currentParentId = (_, i) => P[i];
+    }
+
+    for (i = 0, n = nodes.length; i < n; ++i) {
       d = nodes[i], node = nodes[i] = new Node$1(d);
-      if ((nodeId = id(d, i, data)) != null && (nodeId += "")) {
+      if ((nodeId = currentId(d, i, data)) != null && (nodeId += "")) {
         nodeKey = node.id = nodeId;
         nodeByKey.set(nodeKey, nodeByKey.has(nodeKey) ? ambiguous : node);
       }
-      if ((nodeId = parentId(d, i, data)) != null && (nodeId += "")) {
+      if ((nodeId = currentParentId(d, i, data)) != null && (nodeId += "")) {
         node.parent = nodeId;
       }
     }
@@ -13402,6 +13752,20 @@ function stratify() {
     }
 
     if (!root) throw new Error("no root");
+
+    // When imputing internal nodes, only introduce roots if needed.
+    // Then replace the imputed marker data with null.
+    if (path != null) {
+      while (root.data === imputed && root.children.length === 1) {
+        root = root.children[0], --n;
+      }
+      for (let i = nodes.length - 1; i >= 0; --i) {
+        node = nodes[i];
+        if (node.data !== imputed) break;
+        node.data = null;
+      }
+    }
+
     root.parent = preroot;
     root.eachBefore(function(node) { node.depth = node.parent.depth + 1; --n; }).eachBefore(computeHeight);
     root.parent = null;
@@ -13411,14 +13775,50 @@ function stratify() {
   }
 
   stratify.id = function(x) {
-    return arguments.length ? (id = required(x), stratify) : id;
+    return arguments.length ? (id = optional(x), stratify) : id;
   };
 
   stratify.parentId = function(x) {
-    return arguments.length ? (parentId = required(x), stratify) : parentId;
+    return arguments.length ? (parentId = optional(x), stratify) : parentId;
+  };
+
+  stratify.path = function(x) {
+    return arguments.length ? (path = optional(x), stratify) : path;
   };
 
   return stratify;
+}
+
+// To normalize a path, we coerce to a string, strip the trailing slash if any
+// (as long as the trailing slash is not immediately preceded by another slash),
+// and add leading slash if missing.
+function normalize$1(path) {
+  path = `${path}`;
+  let i = path.length;
+  if (slash(path, i - 1) && !slash(path, i - 2)) path = path.slice(0, -1);
+  return path[0] === "/" ? path : `/${path}`;
+}
+
+// Walk backwards to find the first slash that is not the leading slash, e.g.:
+// "/foo/bar" ⇥ "/foo", "/foo" ⇥ "/", "/" ↦ "". (The root is special-cased
+// because the id of the root must be a truthy value.)
+function parentof(path) {
+  let i = path.length;
+  if (i < 2) return "";
+  while (--i > 1) if (slash(path, i)) break;
+  return path.slice(0, i);
+}
+
+// Slashes can be escaped; to determine whether a slash is a path delimiter, we
+// count the number of preceding backslashes escaping the forward slash: an odd
+// number indicates an escaped forward slash.
+function slash(path, i) {
+  if (path[i] === "/") {
+    let k = 0;
+    while (i > 0 && path[--i] === "\\") ++k;
+    if ((k & 1) === 0) return true;
+  }
+  return false;
 }
 
 function defaultSeparation(a, b) {
@@ -14467,7 +14867,7 @@ function band() {
     start += (stop - start - step * (n - paddingInner)) * align;
     bandwidth = step * (1 - paddingInner);
     if (round) start = Math.round(start), bandwidth = Math.round(bandwidth);
-    var values = sequence(n).map(function(i) { return start + step * i; });
+    var values = range$2(n).map(function(i) { return start + step * i; });
     return ordinalRange(reverse ? values.reverse() : values);
   }
 
@@ -14595,7 +14995,7 @@ function polymap(domain, range, interpolate) {
   }
 
   return function(x) {
-    var i = bisectRight(domain, x, 1, j) - 1;
+    var i = bisect(domain, x, 1, j) - 1;
     return r[i](d[i](x));
   };
 }
@@ -14832,28 +15232,26 @@ function pow10(x) {
 function powp(base) {
   return base === 10 ? pow10
       : base === Math.E ? Math.exp
-      : function(x) { return Math.pow(base, x); };
+      : x => Math.pow(base, x);
 }
 
 function logp(base) {
   return base === Math.E ? Math.log
       : base === 10 && Math.log10
       || base === 2 && Math.log2
-      || (base = Math.log(base), function(x) { return Math.log(x) / base; });
+      || (base = Math.log(base), x => Math.log(x) / base);
 }
 
 function reflect(f) {
-  return function(x) {
-    return -f(-x);
-  };
+  return (x, k) => -f(-x, k);
 }
 
 function loggish(transform) {
-  var scale = transform(transformLog, transformExp),
-      domain = scale.domain,
-      base = 10,
-      logs,
-      pows;
+  const scale = transform(transformLog, transformExp);
+  const domain = scale.domain;
+  let base = 10;
+  let logs;
+  let pows;
 
   function rescale() {
     logs = logp(base), pows = powp(base);
@@ -14874,34 +15272,33 @@ function loggish(transform) {
     return arguments.length ? (domain(_), rescale()) : domain();
   };
 
-  scale.ticks = function(count) {
-    var d = domain(),
-        u = d[0],
-        v = d[d.length - 1],
-        r;
+  scale.ticks = count => {
+    const d = domain();
+    let u = d[0];
+    let v = d[d.length - 1];
+    const r = v < u;
 
-    if (r = v < u) i = u, u = v, v = i;
+    if (r) ([u, v] = [v, u]);
 
-    var i = logs(u),
-        j = logs(v),
-        p,
-        k,
-        t,
-        n = count == null ? 10 : +count,
-        z = [];
+    let i = logs(u);
+    let j = logs(v);
+    let k;
+    let t;
+    const n = count == null ? 10 : +count;
+    let z = [];
 
     if (!(base % 1) && j - i < n) {
       i = Math.floor(i), j = Math.ceil(j);
       if (u > 0) for (; i <= j; ++i) {
-        for (k = 1, p = pows(i); k < base; ++k) {
-          t = p * k;
+        for (k = 1; k < base; ++k) {
+          t = i < 0 ? k / pows(-i) : k * pows(i);
           if (t < u) continue;
           if (t > v) break;
           z.push(t);
         }
       } else for (; i <= j; ++i) {
-        for (k = base - 1, p = pows(i); k >= 1; --k) {
-          t = p * k;
+        for (k = base - 1; k >= 1; --k) {
+          t = i > 0 ? k / pows(-i) : k * pows(i);
           if (t < u) continue;
           if (t > v) break;
           z.push(t);
@@ -14911,27 +15308,29 @@ function loggish(transform) {
     } else {
       z = ticks(i, j, Math.min(j - i, n)).map(pows);
     }
-
     return r ? z.reverse() : z;
   };
 
-  scale.tickFormat = function(count, specifier) {
-    if (specifier == null) specifier = base === 10 ? ".0e" : ",";
-    if (typeof specifier !== "function") specifier = exports.format(specifier);
-    if (count === Infinity) return specifier;
+  scale.tickFormat = (count, specifier) => {
     if (count == null) count = 10;
-    var k = Math.max(1, base * count / scale.ticks().length); // TODO fast estimate?
-    return function(d) {
-      var i = d / pows(Math.round(logs(d)));
+    if (specifier == null) specifier = base === 10 ? "s" : ",";
+    if (typeof specifier !== "function") {
+      if (!(base % 1) && (specifier = formatSpecifier(specifier)).precision == null) specifier.trim = true;
+      specifier = exports.format(specifier);
+    }
+    if (count === Infinity) return specifier;
+    const k = Math.max(1, base * count / scale.ticks().length); // TODO fast estimate?
+    return d => {
+      let i = d / pows(Math.round(logs(d)));
       if (i * base < base - 0.5) i *= base;
       return i <= k ? specifier(d) : "";
     };
   };
 
-  scale.nice = function() {
+  scale.nice = () => {
     return domain(nice(domain(), {
-      floor: function(x) { return pows(Math.floor(logs(x))); },
-      ceil: function(x) { return pows(Math.ceil(logs(x))); }
+      floor: x => pows(Math.floor(logs(x))),
+      ceil: x => pows(Math.ceil(logs(x)))
     }));
   };
 
@@ -14939,14 +15338,9 @@ function loggish(transform) {
 }
 
 function log() {
-  var scale = loggish(transformer$2()).domain([1, 10]);
-
-  scale.copy = function() {
-    return copy$1(scale, log()).base(scale.base());
-  };
-
+  const scale = loggish(transformer$2()).domain([1, 10]);
+  scale.copy = () => copy$1(scale, log()).base(scale.base());
   initRange.apply(scale, arguments);
-
   return scale;
 }
 
@@ -15102,7 +15496,7 @@ function quantile() {
   }
 
   function scale(x) {
-    return x == null || isNaN(x = +x) ? unknown : range[bisectRight(thresholds, x)];
+    return x == null || isNaN(x = +x) ? unknown : range[bisect(thresholds, x)];
   }
 
   scale.invertExtent = function(y) {
@@ -15152,7 +15546,7 @@ function quantize() {
       unknown;
 
   function scale(x) {
-    return x != null && x <= x ? range[bisectRight(domain, x, 0, n)] : unknown;
+    return x != null && x <= x ? range[bisect(domain, x, 0, n)] : unknown;
   }
 
   function rescale() {
@@ -15203,7 +15597,7 @@ function threshold() {
       n = 1;
 
   function scale(x) {
-    return x != null && x <= x ? range[bisectRight(domain, x, 0, n)] : unknown;
+    return x != null && x <= x ? range[bisect(domain, x, 0, n)] : unknown;
   }
 
   scale.domain = function(_) {
@@ -15233,47 +15627,46 @@ function threshold() {
   return initRange.apply(scale, arguments);
 }
 
-var t0 = new Date,
-    t1 = new Date;
+const t0 = new Date, t1 = new Date;
 
-function newInterval(floori, offseti, count, field) {
+function timeInterval(floori, offseti, count, field) {
 
   function interval(date) {
     return floori(date = arguments.length === 0 ? new Date : new Date(+date)), date;
   }
 
-  interval.floor = function(date) {
+  interval.floor = (date) => {
     return floori(date = new Date(+date)), date;
   };
 
-  interval.ceil = function(date) {
+  interval.ceil = (date) => {
     return floori(date = new Date(date - 1)), offseti(date, 1), floori(date), date;
   };
 
-  interval.round = function(date) {
-    var d0 = interval(date),
-        d1 = interval.ceil(date);
+  interval.round = (date) => {
+    const d0 = interval(date), d1 = interval.ceil(date);
     return date - d0 < d1 - date ? d0 : d1;
   };
 
-  interval.offset = function(date, step) {
+  interval.offset = (date, step) => {
     return offseti(date = new Date(+date), step == null ? 1 : Math.floor(step)), date;
   };
 
-  interval.range = function(start, stop, step) {
-    var range = [], previous;
+  interval.range = (start, stop, step) => {
+    const range = [];
     start = interval.ceil(start);
     step = step == null ? 1 : Math.floor(step);
     if (!(start < stop) || !(step > 0)) return range; // also handles Invalid Date
+    let previous;
     do range.push(previous = new Date(+start)), offseti(start, step), floori(start);
     while (previous < start && start < stop);
     return range;
   };
 
-  interval.filter = function(test) {
-    return newInterval(function(date) {
+  interval.filter = (test) => {
+    return timeInterval((date) => {
       if (date >= date) while (floori(date), !test(date)) date.setTime(date - 1);
-    }, function(date, step) {
+    }, (date, step) => {
       if (date >= date) {
         if (step < 0) while (++step <= 0) {
           while (offseti(date, -1), !test(date)) {} // eslint-disable-line no-empty
@@ -15285,47 +15678,48 @@ function newInterval(floori, offseti, count, field) {
   };
 
   if (count) {
-    interval.count = function(start, end) {
+    interval.count = (start, end) => {
       t0.setTime(+start), t1.setTime(+end);
       floori(t0), floori(t1);
       return Math.floor(count(t0, t1));
     };
 
-    interval.every = function(step) {
+    interval.every = (step) => {
       step = Math.floor(step);
       return !isFinite(step) || !(step > 0) ? null
           : !(step > 1) ? interval
           : interval.filter(field
-              ? function(d) { return field(d) % step === 0; }
-              : function(d) { return interval.count(0, d) % step === 0; });
+              ? (d) => field(d) % step === 0
+              : (d) => interval.count(0, d) % step === 0);
     };
   }
 
   return interval;
 }
 
-var millisecond = newInterval(function() {
+const millisecond = timeInterval(() => {
   // noop
-}, function(date, step) {
+}, (date, step) => {
   date.setTime(+date + step);
-}, function(start, end) {
+}, (start, end) => {
   return end - start;
 });
 
 // An optimized implementation for this simple case.
-millisecond.every = function(k) {
+millisecond.every = (k) => {
   k = Math.floor(k);
   if (!isFinite(k) || !(k > 0)) return null;
   if (!(k > 1)) return millisecond;
-  return newInterval(function(date) {
+  return timeInterval((date) => {
     date.setTime(Math.floor(date / k) * k);
-  }, function(date, step) {
+  }, (date, step) => {
     date.setTime(+date + step * k);
-  }, function(start, end) {
+  }, (start, end) => {
     return (end - start) / k;
   });
 };
-var milliseconds = millisecond.range;
+
+const milliseconds = millisecond.range;
 
 const durationSecond = 1000;
 const durationMinute = durationSecond * 60;
@@ -15335,203 +15729,226 @@ const durationWeek = durationDay * 7;
 const durationMonth = durationDay * 30;
 const durationYear = durationDay * 365;
 
-var second = newInterval(function(date) {
+const second = timeInterval((date) => {
   date.setTime(date - date.getMilliseconds());
-}, function(date, step) {
+}, (date, step) => {
   date.setTime(+date + step * durationSecond);
-}, function(start, end) {
+}, (start, end) => {
   return (end - start) / durationSecond;
-}, function(date) {
+}, (date) => {
   return date.getUTCSeconds();
 });
-var seconds = second.range;
 
-var minute = newInterval(function(date) {
+const seconds = second.range;
+
+const timeMinute = timeInterval((date) => {
   date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond);
-}, function(date, step) {
+}, (date, step) => {
   date.setTime(+date + step * durationMinute);
-}, function(start, end) {
+}, (start, end) => {
   return (end - start) / durationMinute;
-}, function(date) {
+}, (date) => {
   return date.getMinutes();
 });
-var minutes = minute.range;
 
-var hour = newInterval(function(date) {
+const timeMinutes = timeMinute.range;
+
+const utcMinute = timeInterval((date) => {
+  date.setUTCSeconds(0, 0);
+}, (date, step) => {
+  date.setTime(+date + step * durationMinute);
+}, (start, end) => {
+  return (end - start) / durationMinute;
+}, (date) => {
+  return date.getUTCMinutes();
+});
+
+const utcMinutes = utcMinute.range;
+
+const timeHour = timeInterval((date) => {
   date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond - date.getMinutes() * durationMinute);
-}, function(date, step) {
+}, (date, step) => {
   date.setTime(+date + step * durationHour);
-}, function(start, end) {
+}, (start, end) => {
   return (end - start) / durationHour;
-}, function(date) {
+}, (date) => {
   return date.getHours();
 });
-var hours = hour.range;
 
-var day = newInterval(
+const timeHours = timeHour.range;
+
+const utcHour = timeInterval((date) => {
+  date.setUTCMinutes(0, 0, 0);
+}, (date, step) => {
+  date.setTime(+date + step * durationHour);
+}, (start, end) => {
+  return (end - start) / durationHour;
+}, (date) => {
+  return date.getUTCHours();
+});
+
+const utcHours = utcHour.range;
+
+const timeDay = timeInterval(
   date => date.setHours(0, 0, 0, 0),
   (date, step) => date.setDate(date.getDate() + step),
   (start, end) => (end - start - (end.getTimezoneOffset() - start.getTimezoneOffset()) * durationMinute) / durationDay,
   date => date.getDate() - 1
 );
-var days = day.range;
 
-function weekday(i) {
-  return newInterval(function(date) {
+const timeDays = timeDay.range;
+
+const utcDay = timeInterval((date) => {
+  date.setUTCHours(0, 0, 0, 0);
+}, (date, step) => {
+  date.setUTCDate(date.getUTCDate() + step);
+}, (start, end) => {
+  return (end - start) / durationDay;
+}, (date) => {
+  return date.getUTCDate() - 1;
+});
+
+const utcDays = utcDay.range;
+
+const unixDay = timeInterval((date) => {
+  date.setUTCHours(0, 0, 0, 0);
+}, (date, step) => {
+  date.setUTCDate(date.getUTCDate() + step);
+}, (start, end) => {
+  return (end - start) / durationDay;
+}, (date) => {
+  return Math.floor(date / durationDay);
+});
+
+const unixDays = unixDay.range;
+
+function timeWeekday(i) {
+  return timeInterval((date) => {
     date.setDate(date.getDate() - (date.getDay() + 7 - i) % 7);
     date.setHours(0, 0, 0, 0);
-  }, function(date, step) {
+  }, (date, step) => {
     date.setDate(date.getDate() + step * 7);
-  }, function(start, end) {
+  }, (start, end) => {
     return (end - start - (end.getTimezoneOffset() - start.getTimezoneOffset()) * durationMinute) / durationWeek;
   });
 }
 
-var sunday = weekday(0);
-var monday = weekday(1);
-var tuesday = weekday(2);
-var wednesday = weekday(3);
-var thursday = weekday(4);
-var friday = weekday(5);
-var saturday = weekday(6);
+const timeSunday = timeWeekday(0);
+const timeMonday = timeWeekday(1);
+const timeTuesday = timeWeekday(2);
+const timeWednesday = timeWeekday(3);
+const timeThursday = timeWeekday(4);
+const timeFriday = timeWeekday(5);
+const timeSaturday = timeWeekday(6);
 
-var sundays = sunday.range;
-var mondays = monday.range;
-var tuesdays = tuesday.range;
-var wednesdays = wednesday.range;
-var thursdays = thursday.range;
-var fridays = friday.range;
-var saturdays = saturday.range;
-
-var month = newInterval(function(date) {
-  date.setDate(1);
-  date.setHours(0, 0, 0, 0);
-}, function(date, step) {
-  date.setMonth(date.getMonth() + step);
-}, function(start, end) {
-  return end.getMonth() - start.getMonth() + (end.getFullYear() - start.getFullYear()) * 12;
-}, function(date) {
-  return date.getMonth();
-});
-var months = month.range;
-
-var year = newInterval(function(date) {
-  date.setMonth(0, 1);
-  date.setHours(0, 0, 0, 0);
-}, function(date, step) {
-  date.setFullYear(date.getFullYear() + step);
-}, function(start, end) {
-  return end.getFullYear() - start.getFullYear();
-}, function(date) {
-  return date.getFullYear();
-});
-
-// An optimized implementation for this simple case.
-year.every = function(k) {
-  return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : newInterval(function(date) {
-    date.setFullYear(Math.floor(date.getFullYear() / k) * k);
-    date.setMonth(0, 1);
-    date.setHours(0, 0, 0, 0);
-  }, function(date, step) {
-    date.setFullYear(date.getFullYear() + step * k);
-  });
-};
-var years = year.range;
-
-var utcMinute = newInterval(function(date) {
-  date.setUTCSeconds(0, 0);
-}, function(date, step) {
-  date.setTime(+date + step * durationMinute);
-}, function(start, end) {
-  return (end - start) / durationMinute;
-}, function(date) {
-  return date.getUTCMinutes();
-});
-var utcMinutes = utcMinute.range;
-
-var utcHour = newInterval(function(date) {
-  date.setUTCMinutes(0, 0, 0);
-}, function(date, step) {
-  date.setTime(+date + step * durationHour);
-}, function(start, end) {
-  return (end - start) / durationHour;
-}, function(date) {
-  return date.getUTCHours();
-});
-var utcHours = utcHour.range;
-
-var utcDay = newInterval(function(date) {
-  date.setUTCHours(0, 0, 0, 0);
-}, function(date, step) {
-  date.setUTCDate(date.getUTCDate() + step);
-}, function(start, end) {
-  return (end - start) / durationDay;
-}, function(date) {
-  return date.getUTCDate() - 1;
-});
-var utcDays = utcDay.range;
+const timeSundays = timeSunday.range;
+const timeMondays = timeMonday.range;
+const timeTuesdays = timeTuesday.range;
+const timeWednesdays = timeWednesday.range;
+const timeThursdays = timeThursday.range;
+const timeFridays = timeFriday.range;
+const timeSaturdays = timeSaturday.range;
 
 function utcWeekday(i) {
-  return newInterval(function(date) {
+  return timeInterval((date) => {
     date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 7 - i) % 7);
     date.setUTCHours(0, 0, 0, 0);
-  }, function(date, step) {
+  }, (date, step) => {
     date.setUTCDate(date.getUTCDate() + step * 7);
-  }, function(start, end) {
+  }, (start, end) => {
     return (end - start) / durationWeek;
   });
 }
 
-var utcSunday = utcWeekday(0);
-var utcMonday = utcWeekday(1);
-var utcTuesday = utcWeekday(2);
-var utcWednesday = utcWeekday(3);
-var utcThursday = utcWeekday(4);
-var utcFriday = utcWeekday(5);
-var utcSaturday = utcWeekday(6);
+const utcSunday = utcWeekday(0);
+const utcMonday = utcWeekday(1);
+const utcTuesday = utcWeekday(2);
+const utcWednesday = utcWeekday(3);
+const utcThursday = utcWeekday(4);
+const utcFriday = utcWeekday(5);
+const utcSaturday = utcWeekday(6);
 
-var utcSundays = utcSunday.range;
-var utcMondays = utcMonday.range;
-var utcTuesdays = utcTuesday.range;
-var utcWednesdays = utcWednesday.range;
-var utcThursdays = utcThursday.range;
-var utcFridays = utcFriday.range;
-var utcSaturdays = utcSaturday.range;
+const utcSundays = utcSunday.range;
+const utcMondays = utcMonday.range;
+const utcTuesdays = utcTuesday.range;
+const utcWednesdays = utcWednesday.range;
+const utcThursdays = utcThursday.range;
+const utcFridays = utcFriday.range;
+const utcSaturdays = utcSaturday.range;
 
-var utcMonth = newInterval(function(date) {
+const timeMonth = timeInterval((date) => {
+  date.setDate(1);
+  date.setHours(0, 0, 0, 0);
+}, (date, step) => {
+  date.setMonth(date.getMonth() + step);
+}, (start, end) => {
+  return end.getMonth() - start.getMonth() + (end.getFullYear() - start.getFullYear()) * 12;
+}, (date) => {
+  return date.getMonth();
+});
+
+const timeMonths = timeMonth.range;
+
+const utcMonth = timeInterval((date) => {
   date.setUTCDate(1);
   date.setUTCHours(0, 0, 0, 0);
-}, function(date, step) {
+}, (date, step) => {
   date.setUTCMonth(date.getUTCMonth() + step);
-}, function(start, end) {
+}, (start, end) => {
   return end.getUTCMonth() - start.getUTCMonth() + (end.getUTCFullYear() - start.getUTCFullYear()) * 12;
-}, function(date) {
+}, (date) => {
   return date.getUTCMonth();
 });
-var utcMonths = utcMonth.range;
 
-var utcYear = newInterval(function(date) {
+const utcMonths = utcMonth.range;
+
+const timeYear = timeInterval((date) => {
+  date.setMonth(0, 1);
+  date.setHours(0, 0, 0, 0);
+}, (date, step) => {
+  date.setFullYear(date.getFullYear() + step);
+}, (start, end) => {
+  return end.getFullYear() - start.getFullYear();
+}, (date) => {
+  return date.getFullYear();
+});
+
+// An optimized implementation for this simple case.
+timeYear.every = (k) => {
+  return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : timeInterval((date) => {
+    date.setFullYear(Math.floor(date.getFullYear() / k) * k);
+    date.setMonth(0, 1);
+    date.setHours(0, 0, 0, 0);
+  }, (date, step) => {
+    date.setFullYear(date.getFullYear() + step * k);
+  });
+};
+
+const timeYears = timeYear.range;
+
+const utcYear = timeInterval((date) => {
   date.setUTCMonth(0, 1);
   date.setUTCHours(0, 0, 0, 0);
-}, function(date, step) {
+}, (date, step) => {
   date.setUTCFullYear(date.getUTCFullYear() + step);
-}, function(start, end) {
+}, (start, end) => {
   return end.getUTCFullYear() - start.getUTCFullYear();
-}, function(date) {
+}, (date) => {
   return date.getUTCFullYear();
 });
 
 // An optimized implementation for this simple case.
-utcYear.every = function(k) {
-  return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : newInterval(function(date) {
+utcYear.every = (k) => {
+  return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : timeInterval((date) => {
     date.setUTCFullYear(Math.floor(date.getUTCFullYear() / k) * k);
     date.setUTCMonth(0, 1);
     date.setUTCHours(0, 0, 0, 0);
-  }, function(date, step) {
+  }, (date, step) => {
     date.setUTCFullYear(date.getUTCFullYear() + step * k);
   });
 };
-var utcYears = utcYear.range;
+
+const utcYears = utcYear.range;
 
 function ticker(year, month, week, day, hour, minute) {
 
@@ -15576,8 +15993,8 @@ function ticker(year, month, week, day, hour, minute) {
   return [ticks, tickInterval];
 }
 
-const [utcTicks, utcTickInterval] = ticker(utcYear, utcMonth, utcSunday, utcDay, utcHour, utcMinute);
-const [timeTicks, timeTickInterval] = ticker(year, month, sunday, day, hour, minute);
+const [utcTicks, utcTickInterval] = ticker(utcYear, utcMonth, utcSunday, unixDay, utcHour, utcMinute);
+const [timeTicks, timeTickInterval] = ticker(timeYear, timeMonth, timeSunday, timeDay, timeHour, timeMinute);
 
 function localDate(d) {
   if (0 <= d.y && d.y < 100) {
@@ -15767,7 +16184,7 @@ function formatLocale(locale) {
     return function(string) {
       var d = newDate(1900, undefined, 1),
           i = parseSpecifier(d, specifier, string += "", 0),
-          week, day$1;
+          week, day;
       if (i != string.length) return null;
 
       // If a UNIX timestamp is specified, return it.
@@ -15788,25 +16205,25 @@ function formatLocale(locale) {
         if (d.V < 1 || d.V > 53) return null;
         if (!("w" in d)) d.w = 1;
         if ("Z" in d) {
-          week = utcDate(newDate(d.y, 0, 1)), day$1 = week.getUTCDay();
-          week = day$1 > 4 || day$1 === 0 ? utcMonday.ceil(week) : utcMonday(week);
+          week = utcDate(newDate(d.y, 0, 1)), day = week.getUTCDay();
+          week = day > 4 || day === 0 ? utcMonday.ceil(week) : utcMonday(week);
           week = utcDay.offset(week, (d.V - 1) * 7);
           d.y = week.getUTCFullYear();
           d.m = week.getUTCMonth();
           d.d = week.getUTCDate() + (d.w + 6) % 7;
         } else {
-          week = localDate(newDate(d.y, 0, 1)), day$1 = week.getDay();
-          week = day$1 > 4 || day$1 === 0 ? monday.ceil(week) : monday(week);
-          week = day.offset(week, (d.V - 1) * 7);
+          week = localDate(newDate(d.y, 0, 1)), day = week.getDay();
+          week = day > 4 || day === 0 ? timeMonday.ceil(week) : timeMonday(week);
+          week = timeDay.offset(week, (d.V - 1) * 7);
           d.y = week.getFullYear();
           d.m = week.getMonth();
           d.d = week.getDate() + (d.w + 6) % 7;
         }
       } else if ("W" in d || "U" in d) {
         if (!("w" in d)) d.w = "u" in d ? d.u % 7 : "W" in d ? 1 : 0;
-        day$1 = "Z" in d ? utcDate(newDate(d.y, 0, 1)).getUTCDay() : localDate(newDate(d.y, 0, 1)).getDay();
+        day = "Z" in d ? utcDate(newDate(d.y, 0, 1)).getUTCDay() : localDate(newDate(d.y, 0, 1)).getDay();
         d.m = 0;
-        d.d = "W" in d ? (d.w + 6) % 7 + d.W * 7 - (day$1 + 5) % 7 : d.w + d.U * 7 - (day$1 + 6) % 7;
+        d.d = "W" in d ? (d.w + 6) % 7 + d.W * 7 - (day + 5) % 7 : d.w + d.U * 7 - (day + 6) % 7;
       }
 
       // If a time zone is specified, all fields are interpreted as UTC and then
@@ -16090,7 +16507,7 @@ function formatHour12(d, p) {
 }
 
 function formatDayOfYear(d, p) {
-  return pad(1 + day.count(year(d), d), p, 3);
+  return pad(1 + timeDay.count(timeYear(d), d), p, 3);
 }
 
 function formatMilliseconds(d, p) {
@@ -16119,17 +16536,17 @@ function formatWeekdayNumberMonday(d) {
 }
 
 function formatWeekNumberSunday(d, p) {
-  return pad(sunday.count(year(d) - 1, d), p, 2);
+  return pad(timeSunday.count(timeYear(d) - 1, d), p, 2);
 }
 
 function dISO(d) {
   var day = d.getDay();
-  return (day >= 4 || day === 0) ? thursday(d) : thursday.ceil(d);
+  return (day >= 4 || day === 0) ? timeThursday(d) : timeThursday.ceil(d);
 }
 
 function formatWeekNumberISO(d, p) {
   d = dISO(d);
-  return pad(thursday.count(year(d), d) + (year(d).getDay() === 4), p, 2);
+  return pad(timeThursday.count(timeYear(d), d) + (timeYear(d).getDay() === 4), p, 2);
 }
 
 function formatWeekdayNumberSunday(d) {
@@ -16137,7 +16554,7 @@ function formatWeekdayNumberSunday(d) {
 }
 
 function formatWeekNumberMonday(d, p) {
-  return pad(monday.count(year(d) - 1, d), p, 2);
+  return pad(timeMonday.count(timeYear(d) - 1, d), p, 2);
 }
 
 function formatYear(d, p) {
@@ -16155,7 +16572,7 @@ function formatFullYear(d, p) {
 
 function formatFullYearISO(d, p) {
   var day = d.getDay();
-  d = (day >= 4 || day === 0) ? thursday(d) : thursday.ceil(d);
+  d = (day >= 4 || day === 0) ? timeThursday(d) : timeThursday.ceil(d);
   return pad(d.getFullYear() % 10000, p, 4);
 }
 
@@ -16300,6 +16717,8 @@ var formatIso = Date.prototype.toISOString
     ? formatIsoNative
     : exports.utcFormat(isoSpecifier);
 
+var formatIso$1 = formatIso;
+
 function parseIsoNative(string) {
   var date = new Date(string);
   return isNaN(date) ? null : date;
@@ -16308,6 +16727,8 @@ function parseIsoNative(string) {
 var parseIso = +new Date("2000-01-01T00:00:00.000Z")
     ? parseIsoNative
     : exports.utcParse(isoSpecifier);
+
+var parseIso$1 = parseIso;
 
 function date(t) {
   return new Date(t);
@@ -16372,7 +16793,7 @@ function calendar(ticks, tickInterval, year, month, week, day, hour, minute, sec
 }
 
 function time() {
-  return initRange.apply(calendar(timeTicks, timeTickInterval, year, month, sunday, day, hour, minute, second, exports.timeFormat).domain([new Date(2000, 0, 1), new Date(2000, 0, 2)]), arguments);
+  return initRange.apply(calendar(timeTicks, timeTickInterval, timeYear, timeMonth, timeSunday, timeDay, timeHour, timeMinute, second, exports.timeFormat).domain([new Date(2000, 0, 1), new Date(2000, 0, 2)]), arguments);
 }
 
 function utcTime() {
@@ -16484,7 +16905,7 @@ function sequentialQuantile() {
       interpolator = identity$3;
 
   function scale(x) {
-    if (x != null && !isNaN(x = +x)) return interpolator((bisectRight(domain, x, 1) - 1) / (domain.length - 1));
+    if (x != null && !isNaN(x = +x)) return interpolator((bisect(domain, x, 1) - 1) / (domain.length - 1));
   }
 
   scale.domain = function(_) {
@@ -17049,18 +17470,18 @@ function constant$1(x) {
   };
 }
 
-var abs = Math.abs;
-var atan2 = Math.atan2;
-var cos = Math.cos;
-var max = Math.max;
-var min = Math.min;
-var sin = Math.sin;
-var sqrt = Math.sqrt;
+const abs = Math.abs;
+const atan2 = Math.atan2;
+const cos = Math.cos;
+const max = Math.max;
+const min = Math.min;
+const sin = Math.sin;
+const sqrt = Math.sqrt;
 
-var epsilon = 1e-12;
-var pi = Math.PI;
-var halfPi = pi / 2;
-var tau = 2 * pi;
+const epsilon = 1e-12;
+const pi = Math.PI;
+const halfPi = pi / 2;
+const tau = 2 * pi;
 
 function acos(x) {
   return x > 1 ? 0 : x < -1 ? pi : Math.acos(x);
@@ -17068,6 +17489,24 @@ function acos(x) {
 
 function asin(x) {
   return x >= 1 ? halfPi : x <= -1 ? -halfPi : Math.asin(x);
+}
+
+function withPath(shape) {
+  let digits = 3;
+
+  shape.digits = function(_) {
+    if (!arguments.length) return digits;
+    if (_ == null) {
+      digits = null;
+    } else {
+      const d = Math.floor(_);
+      if (!(d >= 0)) throw new RangeError(`invalid digits: ${_}`);
+      digits = d;
+    }
+    return shape;
+  };
+
+  return () => new Path$1(digits);
 }
 
 function arcInnerRadius(d) {
@@ -17150,7 +17589,8 @@ function arc() {
       startAngle = arcStartAngle,
       endAngle = arcEndAngle,
       padAngle = arcPadAngle,
-      context = null;
+      context = null,
+      path = withPath(arc);
 
   function arc() {
     var buffer,
@@ -17219,16 +17659,22 @@ function arc() {
             y00 = r0 * sin(a00),
             oc;
 
-        // Restrict the corner radius according to the sector angle.
-        if (da < pi && (oc = intersect(x01, y01, x00, y00, x11, y11, x10, y10))) {
-          var ax = x01 - oc[0],
-              ay = y01 - oc[1],
-              bx = x11 - oc[0],
-              by = y11 - oc[1],
-              kc = 1 / sin(acos((ax * bx + ay * by) / (sqrt(ax * ax + ay * ay) * sqrt(bx * bx + by * by))) / 2),
-              lc = sqrt(oc[0] * oc[0] + oc[1] * oc[1]);
-          rc0 = min(rc, (r0 - lc) / (kc - 1));
-          rc1 = min(rc, (r1 - lc) / (kc + 1));
+        // Restrict the corner radius according to the sector angle. If this
+        // intersection fails, it’s probably because the arc is too small, so
+        // disable the corner radius entirely.
+        if (da < pi) {
+          if (oc = intersect(x01, y01, x00, y00, x11, y11, x10, y10)) {
+            var ax = x01 - oc[0],
+                ay = y01 - oc[1],
+                bx = x11 - oc[0],
+                by = y11 - oc[1],
+                kc = 1 / sin(acos((ax * bx + ay * by) / (sqrt(ax * ax + ay * ay) * sqrt(bx * bx + by * by))) / 2),
+                lc = sqrt(oc[0] * oc[0] + oc[1] * oc[1]);
+            rc0 = min(rc, (r0 - lc) / (kc - 1));
+            rc1 = min(rc, (r1 - lc) / (kc + 1));
+          } else {
+            rc0 = rc1 = 0;
+          }
         }
       }
 
@@ -17380,7 +17826,8 @@ function line(x$1, y$1) {
   var defined = constant$1(true),
       context = null,
       curve = curveLinear,
-      output = null;
+      output = null,
+      path = withPath(line);
 
   x$1 = typeof x$1 === "function" ? x$1 : (x$1 === undefined) ? x : constant$1(x$1);
   y$1 = typeof y$1 === "function" ? y$1 : (y$1 === undefined) ? y : constant$1(y$1);
@@ -17433,7 +17880,8 @@ function area(x0, y0, y1) {
       defined = constant$1(true),
       context = null,
       curve = curveLinear,
-      output = null;
+      output = null,
+      path = withPath(area);
 
   x0 = typeof x0 === "function" ? x0 : (x0 === undefined) ? x : constant$1(+x0);
   y0 = typeof y0 === "function" ? y0 : (y0 === undefined) ? constant$1(0) : constant$1(+y0);
@@ -17616,7 +18064,7 @@ function pie() {
   return pie;
 }
 
-var curveRadialLinear = curveRadial$1(curveLinear);
+var curveRadialLinear = curveRadial(curveLinear);
 
 function Radial(curve) {
   this._curve = curve;
@@ -17640,7 +18088,7 @@ Radial.prototype = {
   }
 };
 
-function curveRadial$1(curve) {
+function curveRadial(curve) {
 
   function radial(context) {
     return new Radial(curve(context));
@@ -17658,7 +18106,7 @@ function lineRadial(l) {
   l.radius = l.y, delete l.y;
 
   l.curve = function(_) {
-    return arguments.length ? c(curveRadial$1(_)) : c()._curve;
+    return arguments.length ? c(curveRadial(_)) : c()._curve;
   };
 
   return l;
@@ -17688,7 +18136,7 @@ function areaRadial() {
   a.lineOuterRadius = function() { return lineRadial(y1()); }, delete a.lineY1;
 
   a.curve = function(_) {
-    return arguments.length ? c(curveRadial$1(_)) : c()._curve;
+    return arguments.length ? c(curveRadial(_)) : c()._curve;
   };
 
   return a;
@@ -17696,6 +18144,80 @@ function areaRadial() {
 
 function pointRadial(x, y) {
   return [(y = +y) * Math.cos(x -= Math.PI / 2), y * Math.sin(x)];
+}
+
+class Bump {
+  constructor(context, x) {
+    this._context = context;
+    this._x = x;
+  }
+  areaStart() {
+    this._line = 0;
+  }
+  areaEnd() {
+    this._line = NaN;
+  }
+  lineStart() {
+    this._point = 0;
+  }
+  lineEnd() {
+    if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
+    this._line = 1 - this._line;
+  }
+  point(x, y) {
+    x = +x, y = +y;
+    switch (this._point) {
+      case 0: {
+        this._point = 1;
+        if (this._line) this._context.lineTo(x, y);
+        else this._context.moveTo(x, y);
+        break;
+      }
+      case 1: this._point = 2; // falls through
+      default: {
+        if (this._x) this._context.bezierCurveTo(this._x0 = (this._x0 + x) / 2, this._y0, this._x0, y, x, y);
+        else this._context.bezierCurveTo(this._x0, this._y0 = (this._y0 + y) / 2, x, this._y0, x, y);
+        break;
+      }
+    }
+    this._x0 = x, this._y0 = y;
+  }
+}
+
+class BumpRadial {
+  constructor(context) {
+    this._context = context;
+  }
+  lineStart() {
+    this._point = 0;
+  }
+  lineEnd() {}
+  point(x, y) {
+    x = +x, y = +y;
+    if (this._point === 0) {
+      this._point = 1;
+    } else {
+      const p0 = pointRadial(this._x0, this._y0);
+      const p1 = pointRadial(this._x0, this._y0 = (this._y0 + y) / 2);
+      const p2 = pointRadial(x, this._y0);
+      const p3 = pointRadial(x, y);
+      this._context.moveTo(...p0);
+      this._context.bezierCurveTo(...p1, ...p2, ...p3);
+    }
+    this._x0 = x, this._y0 = y;
+  }
+}
+
+function bumpX(context) {
+  return new Bump(context, true);
+}
+
+function bumpY(context) {
+  return new Bump(context, false);
+}
+
+function bumpRadial(context) {
+  return new BumpRadial(context);
 }
 
 function linkSource(d) {
@@ -17707,17 +18229,25 @@ function linkTarget(d) {
 }
 
 function link(curve) {
-  var source = linkSource,
+  let source = linkSource,
       target = linkTarget,
       x$1 = x,
       y$1 = y,
-      context = null;
+      context = null,
+      output = null,
+      path = withPath(link);
 
   function link() {
-    var buffer, argv = slice.call(arguments), s = source.apply(this, argv), t = target.apply(this, argv);
-    if (!context) context = buffer = path();
-    curve(context, +x$1.apply(this, (argv[0] = s, argv)), +y$1.apply(this, argv), +x$1.apply(this, (argv[0] = t, argv)), +y$1.apply(this, argv));
-    if (buffer) return context = null, buffer + "" || null;
+    let buffer;
+    const argv = slice.call(arguments);
+    const s = source.apply(this, argv);
+    const t = target.apply(this, argv);
+    if (context == null) output = curve(buffer = path());
+    output.lineStart();
+    argv[0] = s, output.point(+x$1.apply(this, argv), +y$1.apply(this, argv));
+    argv[0] = t, output.point(+x$1.apply(this, argv), +y$1.apply(this, argv));
+    output.lineEnd();
+    if (buffer) return output = null, buffer + "" || null;
   }
 
   link.source = function(_) {
@@ -17737,57 +18267,54 @@ function link(curve) {
   };
 
   link.context = function(_) {
-    return arguments.length ? ((context = _ == null ? null : _), link) : context;
+    return arguments.length ? (_ == null ? context = output = null : output = curve(context = _), link) : context;
   };
 
   return link;
 }
 
-function curveHorizontal(context, x0, y0, x1, y1) {
-  context.moveTo(x0, y0);
-  context.bezierCurveTo(x0 = (x0 + x1) / 2, y0, x0, y1, x1, y1);
-}
-
-function curveVertical(context, x0, y0, x1, y1) {
-  context.moveTo(x0, y0);
-  context.bezierCurveTo(x0, y0 = (y0 + y1) / 2, x1, y0, x1, y1);
-}
-
-function curveRadial(context, x0, y0, x1, y1) {
-  var p0 = pointRadial(x0, y0),
-      p1 = pointRadial(x0, y0 = (y0 + y1) / 2),
-      p2 = pointRadial(x1, y0),
-      p3 = pointRadial(x1, y1);
-  context.moveTo(p0[0], p0[1]);
-  context.bezierCurveTo(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]);
-}
-
 function linkHorizontal() {
-  return link(curveHorizontal);
+  return link(bumpX);
 }
 
 function linkVertical() {
-  return link(curveVertical);
+  return link(bumpY);
 }
 
 function linkRadial() {
-  var l = link(curveRadial);
+  const l = link(bumpRadial);
   l.angle = l.x, delete l.x;
   l.radius = l.y, delete l.y;
   return l;
 }
 
+const sqrt3$2 = sqrt(3);
+
+var asterisk = {
+  draw(context, size) {
+    const r = sqrt(size + min(size / 28, 0.75)) * 0.59436;
+    const t = r / 2;
+    const u = t * sqrt3$2;
+    context.moveTo(0, r);
+    context.lineTo(0, -r);
+    context.moveTo(-u, -t);
+    context.lineTo(u, t);
+    context.moveTo(-u, t);
+    context.lineTo(u, -t);
+  }
+};
+
 var circle = {
-  draw: function(context, size) {
-    var r = Math.sqrt(size / pi);
+  draw(context, size) {
+    const r = sqrt(size / pi);
     context.moveTo(r, 0);
     context.arc(0, 0, r, 0, tau);
   }
 };
 
 var cross = {
-  draw: function(context, size) {
-    var r = Math.sqrt(size / 5) / 2;
+  draw(context, size) {
+    const r = sqrt(size / 5) / 2;
     context.moveTo(-3 * r, -r);
     context.lineTo(-r, -r);
     context.lineTo(-r, -3 * r);
@@ -17804,13 +18331,13 @@ var cross = {
   }
 };
 
-var tan30 = Math.sqrt(1 / 3),
-    tan30_2 = tan30 * 2;
+const tan30 = sqrt(1 / 3);
+const tan30_2 = tan30 * 2;
 
 var diamond = {
-  draw: function(context, size) {
-    var y = Math.sqrt(size / tan30_2),
-        x = y * tan30;
+  draw(context, size) {
+    const y = sqrt(size / tan30_2);
+    const x = y * tan30;
     context.moveTo(0, -y);
     context.lineTo(x, 0);
     context.lineTo(0, y);
@@ -17819,22 +18346,62 @@ var diamond = {
   }
 };
 
-var ka = 0.89081309152928522810,
-    kr = Math.sin(pi / 10) / Math.sin(7 * pi / 10),
-    kx = Math.sin(tau / 10) * kr,
-    ky = -Math.cos(tau / 10) * kr;
+var diamond2 = {
+  draw(context, size) {
+    const r = sqrt(size) * 0.62625;
+    context.moveTo(0, -r);
+    context.lineTo(r, 0);
+    context.lineTo(0, r);
+    context.lineTo(-r, 0);
+    context.closePath();
+  }
+};
+
+var plus = {
+  draw(context, size) {
+    const r = sqrt(size - min(size / 7, 2)) * 0.87559;
+    context.moveTo(-r, 0);
+    context.lineTo(r, 0);
+    context.moveTo(0, r);
+    context.lineTo(0, -r);
+  }
+};
+
+var square = {
+  draw(context, size) {
+    const w = sqrt(size);
+    const x = -w / 2;
+    context.rect(x, x, w, w);
+  }
+};
+
+var square2 = {
+  draw(context, size) {
+    const r = sqrt(size) * 0.4431;
+    context.moveTo(r, r);
+    context.lineTo(r, -r);
+    context.lineTo(-r, -r);
+    context.lineTo(-r, r);
+    context.closePath();
+  }
+};
+
+const ka = 0.89081309152928522810;
+const kr = sin(pi / 10) / sin(7 * pi / 10);
+const kx = sin(tau / 10) * kr;
+const ky = -cos(tau / 10) * kr;
 
 var star = {
-  draw: function(context, size) {
-    var r = Math.sqrt(size * ka),
-        x = kx * r,
-        y = ky * r;
+  draw(context, size) {
+    const r = sqrt(size * ka);
+    const x = kx * r;
+    const y = ky * r;
     context.moveTo(0, -r);
     context.lineTo(x, y);
-    for (var i = 1; i < 5; ++i) {
-      var a = tau * i / 5,
-          c = Math.cos(a),
-          s = Math.sin(a);
+    for (let i = 1; i < 5; ++i) {
+      const a = tau * i / 5;
+      const c = cos(a);
+      const s = sin(a);
       context.lineTo(s * r, -c * r);
       context.lineTo(c * x - s * y, s * x + c * y);
     }
@@ -17842,40 +18409,43 @@ var star = {
   }
 };
 
-var square = {
-  draw: function(context, size) {
-    var w = Math.sqrt(size),
-        x = -w / 2;
-    context.rect(x, x, w, w);
-  }
-};
-
-var sqrt3 = Math.sqrt(3);
+const sqrt3$1 = sqrt(3);
 
 var triangle = {
-  draw: function(context, size) {
-    var y = -Math.sqrt(size / (sqrt3 * 3));
+  draw(context, size) {
+    const y = -sqrt(size / (sqrt3$1 * 3));
     context.moveTo(0, y * 2);
-    context.lineTo(-sqrt3 * y, -y);
-    context.lineTo(sqrt3 * y, -y);
+    context.lineTo(-sqrt3$1 * y, -y);
+    context.lineTo(sqrt3$1 * y, -y);
     context.closePath();
   }
 };
 
-var c = -0.5,
-    s = Math.sqrt(3) / 2,
-    k = 1 / Math.sqrt(12),
-    a = (k / 2 + 1) * 3;
+const sqrt3 = sqrt(3);
+
+var triangle2 = {
+  draw(context, size) {
+    const s = sqrt(size) * 0.6824;
+    const t = s  / 2;
+    const u = (s * sqrt3) / 2; // cos(Math.PI / 6)
+    context.moveTo(0, -s);
+    context.lineTo(u, t);
+    context.lineTo(-u, t);
+    context.closePath();
+  }
+};
+
+const c = -0.5;
+const s = sqrt(3) / 2;
+const k = 1 / sqrt(12);
+const a = (k / 2 + 1) * 3;
 
 var wye = {
-  draw: function(context, size) {
-    var r = Math.sqrt(size / a),
-        x0 = r / 2,
-        y0 = r * k,
-        x1 = x0,
-        y1 = r * k + r,
-        x2 = -x1,
-        y2 = y1;
+  draw(context, size) {
+    const r = sqrt(size / a);
+    const x0 = r / 2, y0 = r * k;
+    const x1 = x0, y1 = r * k + r;
+    const x2 = -x1, y2 = y1;
     context.moveTo(x0, y0);
     context.lineTo(x1, y1);
     context.lineTo(x2, y2);
@@ -17889,7 +18459,18 @@ var wye = {
   }
 };
 
-var symbols = [
+var times = {
+  draw(context, size) {
+    const r = sqrt(size - min(size / 6, 1.7)) * 0.6189;
+    context.moveTo(-r, -r);
+    context.lineTo(r, r);
+    context.moveTo(-r, r);
+    context.lineTo(r, -r);
+  }
+};
+
+// These symbols are designed to be filled.
+const symbolsFill = [
   circle,
   cross,
   diamond,
@@ -17899,13 +18480,26 @@ var symbols = [
   wye
 ];
 
-function symbol(type, size) {
-  var context = null;
+// These symbols are designed to be stroked (with a width of 1.5px and round caps).
+const symbolsStroke = [
+  circle,
+  plus,
+  times,
+  triangle2,
+  asterisk,
+  square2,
+  diamond2
+];
+
+function Symbol$1(type, size) {
+  let context = null,
+      path = withPath(symbol);
+
   type = typeof type === "function" ? type : constant$1(type || circle);
   size = typeof size === "function" ? size : constant$1(size === undefined ? 64 : +size);
 
   function symbol() {
-    var buffer;
+    let buffer;
     if (!context) context = buffer = path();
     type.apply(this, arguments).draw(context, +size.apply(this, arguments));
     if (buffer) return context = null, buffer + "" || null;
@@ -18066,52 +18660,6 @@ BasisOpen.prototype = {
 
 function basisOpen(context) {
   return new BasisOpen(context);
-}
-
-class Bump {
-  constructor(context, x) {
-    this._context = context;
-    this._x = x;
-  }
-  areaStart() {
-    this._line = 0;
-  }
-  areaEnd() {
-    this._line = NaN;
-  }
-  lineStart() {
-    this._point = 0;
-  }
-  lineEnd() {
-    if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
-    this._line = 1 - this._line;
-  }
-  point(x, y) {
-    x = +x, y = +y;
-    switch (this._point) {
-      case 0: {
-        this._point = 1;
-        if (this._line) this._context.lineTo(x, y);
-        else this._context.moveTo(x, y);
-        break;
-      }
-      case 1: this._point = 2; // falls through
-      default: {
-        if (this._x) this._context.bezierCurveTo(this._x0 = (this._x0 + x) / 2, this._y0, this._x0, y, x, y);
-        else this._context.bezierCurveTo(this._x0, this._y0 = (this._y0 + y) / 2, x, this._y0, x, y);
-        break;
-      }
-    }
-    this._x0 = x, this._y0 = y;
-  }
-}
-
-function bumpX(context) {
-  return new Bump(context, true);
-}
-
-function bumpY(context) {
-  return new Bump(context, false);
 }
 
 function Bundle(context, beta) {
@@ -19507,6 +20055,7 @@ exports.FormatSpecifier = FormatSpecifier;
 exports.InternMap = InternMap;
 exports.InternSet = InternSet;
 exports.Node = Node$1;
+exports.Path = Path$1;
 exports.Voronoi = Voronoi;
 exports.ZoomTransform = Transform;
 exports.active = active;
@@ -19520,12 +20069,15 @@ exports.axisLeft = axisLeft;
 exports.axisRight = axisRight;
 exports.axisTop = axisTop;
 exports.bin = bin;
-exports.bisect = bisectRight;
+exports.bisect = bisect;
 exports.bisectCenter = bisectCenter;
 exports.bisectLeft = bisectLeft;
 exports.bisectRight = bisectRight;
 exports.bisector = bisector;
 exports.blob = blob;
+exports.blur = blur;
+exports.blur2 = blur2;
+exports.blurImage = blurImage;
 exports.brush = brush;
 exports.brushSelection = brushSelection;
 exports.brushX = brushX;
@@ -19537,7 +20089,7 @@ exports.chordTranspose = chordTranspose;
 exports.cluster = cluster;
 exports.color = color;
 exports.contourDensity = density;
-exports.contours = contours;
+exports.contours = Contours;
 exports.count = count$1;
 exports.create = create$1;
 exports.creator = creator;
@@ -19646,7 +20198,7 @@ exports.geoAzimuthalEquidistant = azimuthalEquidistant;
 exports.geoAzimuthalEquidistantRaw = azimuthalEquidistantRaw;
 exports.geoBounds = bounds;
 exports.geoCentroid = centroid$1;
-exports.geoCircle = circle$2;
+exports.geoCircle = circle$1;
 exports.geoClipAntimeridian = clipAntimeridian;
 exports.geoClipCircle = clipCircle;
 exports.geoClipExtent = extent;
@@ -19766,8 +20318,8 @@ exports.interpolateZoom = interpolateZoom;
 exports.interrupt = interrupt;
 exports.intersection = intersection;
 exports.interval = interval;
-exports.isoFormat = formatIso;
-exports.isoParse = parseIso;
+exports.isoFormat = formatIso$1;
+exports.isoParse = parseIso$1;
 exports.json = json;
 exports.lab = lab$1;
 exports.lch = lch;
@@ -19775,6 +20327,7 @@ exports.least = least;
 exports.leastIndex = leastIndex;
 exports.line = line;
 exports.lineRadial = lineRadial$1;
+exports.link = link;
 exports.linkHorizontal = linkHorizontal;
 exports.linkRadial = linkRadial;
 exports.linkVertical = linkVertical;
@@ -19785,6 +20338,7 @@ exports.max = max$3;
 exports.maxIndex = maxIndex;
 exports.mean = mean;
 exports.median = median;
+exports.medianIndex = medianIndex;
 exports.merge = merge;
 exports.min = min$2;
 exports.minIndex = minIndex;
@@ -19799,6 +20353,7 @@ exports.packSiblings = siblings;
 exports.pairs = pairs;
 exports.partition = partition;
 exports.path = path;
+exports.pathRound = pathRound;
 exports.permute = permute;
 exports.pie = pie;
 exports.piecewise = piecewise;
@@ -19815,6 +20370,7 @@ exports.precisionPrefix = precisionPrefix;
 exports.precisionRound = precisionRound;
 exports.quadtree = quadtree;
 exports.quantile = quantile$1;
+exports.quantileIndex = quantileIndex;
 exports.quantileSorted = quantileSorted;
 exports.quantize = quantize$1;
 exports.quickselect = quickselect;
@@ -19838,7 +20394,8 @@ exports.randomPareto = pareto;
 exports.randomPoisson = poisson;
 exports.randomUniform = uniform;
 exports.randomWeibull = weibull;
-exports.range = sequence;
+exports.range = range$2;
+exports.rank = rank;
 exports.reduce = reduce;
 exports.reverse = reverse$1;
 exports.rgb = rgb;
@@ -19938,58 +20495,67 @@ exports.subset = subset;
 exports.sum = sum$2;
 exports.superset = superset;
 exports.svg = svg;
-exports.symbol = symbol;
+exports.symbol = Symbol$1;
+exports.symbolAsterisk = asterisk;
 exports.symbolCircle = circle;
 exports.symbolCross = cross;
 exports.symbolDiamond = diamond;
+exports.symbolDiamond2 = diamond2;
+exports.symbolPlus = plus;
 exports.symbolSquare = square;
+exports.symbolSquare2 = square2;
 exports.symbolStar = star;
+exports.symbolTimes = times;
 exports.symbolTriangle = triangle;
+exports.symbolTriangle2 = triangle2;
 exports.symbolWye = wye;
-exports.symbols = symbols;
+exports.symbolX = times;
+exports.symbols = symbolsFill;
+exports.symbolsFill = symbolsFill;
+exports.symbolsStroke = symbolsStroke;
 exports.text = text;
-exports.thresholdFreedmanDiaconis = freedmanDiaconis;
-exports.thresholdScott = scott;
+exports.thresholdFreedmanDiaconis = thresholdFreedmanDiaconis;
+exports.thresholdScott = thresholdScott;
 exports.thresholdSturges = thresholdSturges;
 exports.tickFormat = tickFormat;
 exports.tickIncrement = tickIncrement;
 exports.tickStep = tickStep;
 exports.ticks = ticks;
-exports.timeDay = day;
-exports.timeDays = days;
+exports.timeDay = timeDay;
+exports.timeDays = timeDays;
 exports.timeFormatDefaultLocale = defaultLocale;
 exports.timeFormatLocale = formatLocale;
-exports.timeFriday = friday;
-exports.timeFridays = fridays;
-exports.timeHour = hour;
-exports.timeHours = hours;
-exports.timeInterval = newInterval;
+exports.timeFriday = timeFriday;
+exports.timeFridays = timeFridays;
+exports.timeHour = timeHour;
+exports.timeHours = timeHours;
+exports.timeInterval = timeInterval;
 exports.timeMillisecond = millisecond;
 exports.timeMilliseconds = milliseconds;
-exports.timeMinute = minute;
-exports.timeMinutes = minutes;
-exports.timeMonday = monday;
-exports.timeMondays = mondays;
-exports.timeMonth = month;
-exports.timeMonths = months;
-exports.timeSaturday = saturday;
-exports.timeSaturdays = saturdays;
+exports.timeMinute = timeMinute;
+exports.timeMinutes = timeMinutes;
+exports.timeMonday = timeMonday;
+exports.timeMondays = timeMondays;
+exports.timeMonth = timeMonth;
+exports.timeMonths = timeMonths;
+exports.timeSaturday = timeSaturday;
+exports.timeSaturdays = timeSaturdays;
 exports.timeSecond = second;
 exports.timeSeconds = seconds;
-exports.timeSunday = sunday;
-exports.timeSundays = sundays;
-exports.timeThursday = thursday;
-exports.timeThursdays = thursdays;
+exports.timeSunday = timeSunday;
+exports.timeSundays = timeSundays;
+exports.timeThursday = timeThursday;
+exports.timeThursdays = timeThursdays;
 exports.timeTickInterval = timeTickInterval;
 exports.timeTicks = timeTicks;
-exports.timeTuesday = tuesday;
-exports.timeTuesdays = tuesdays;
-exports.timeWednesday = wednesday;
-exports.timeWednesdays = wednesdays;
-exports.timeWeek = sunday;
-exports.timeWeeks = sundays;
-exports.timeYear = year;
-exports.timeYears = years;
+exports.timeTuesday = timeTuesday;
+exports.timeTuesdays = timeTuesdays;
+exports.timeWednesday = timeWednesday;
+exports.timeWednesdays = timeWednesdays;
+exports.timeWeek = timeSunday;
+exports.timeWeeks = timeSundays;
+exports.timeYear = timeYear;
+exports.timeYears = timeYears;
 exports.timeout = timeout;
 exports.timer = timer;
 exports.timerFlush = timerFlush;
@@ -20012,6 +20578,8 @@ exports.tsvFormatValue = tsvFormatValue;
 exports.tsvParse = tsvParse;
 exports.tsvParseRows = tsvParseRows;
 exports.union = union;
+exports.unixDay = unixDay;
+exports.unixDays = unixDays;
 exports.utcDay = utcDay;
 exports.utcDays = utcDays;
 exports.utcFriday = utcFriday;
@@ -20053,6 +20621,4 @@ exports.zoom = zoom;
 exports.zoomIdentity = identity;
 exports.zoomTransform = transform;
 
-Object.defineProperty(exports, '__esModule', { value: true });
-
-})));
+}));
